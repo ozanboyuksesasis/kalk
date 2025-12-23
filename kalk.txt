@@ -1,0 +1,13 @@
+senden şunu istiyorum C:\codespace\ai altıma kalk adında bir klasör actım buraya bir react native uygulaması başlatacağız. uygulama şöyle olacak ben yeni kıl dönmesi ameliyatı oldum ve bu hastalıgın iyileşme sürecinde ileride cok uzun süreli oturmalar istenmiyor örnek veriyorum 40 dk otur kalk 1 saaat otur kalk gez gibi aralıklı oturmanın iyileşme süreci için önemli oldugu söyleniyor. Bu mantıkta ben bir uygulama yapsam dedim ve uygulamada kaç dk sonra kalkılacagını kullanıcı ayarlasın atıyorum 40 dk 40 dk doldugunda uygulama kalk kalk kalk gibi uuyarı versin hem titreşim olarak hem bir ikon olarak nasılki alarm kurarız zamanı gelince alarm öter ve telefon zil ikonu gösterir ve titreşim çalışır ona benzer şekilde.
+
+ben kıl dönmesi ameliyatı oldugum için böyle bir uygulama aklıma geldi ama sonra bunu genel bir uygulama olarakta yapabiliriz diye düşündüm. örneğin ders calısanlar için de kullanılabilecek bir uygulama gibi  geldi bana.
+
+Kalkacagı zamanı ayarlerken de bir yuvarlak sağa sola dönen sağa dönüşler 10 dk 10 dk arttıran son dönüşler 10 dk 10 dk azaltan aslında walkmanlerin yuvarlak ses acma kapama düğmesine benzer bir tasarım istiyorum. Her dönüşte de altta işte 10 dk 20 dk sonra kalk şeklinde yazıcak 1 saaati geçince de 1 saat sonra kalk 1 saat 10 dk sonra kalk gibi text olarakta yazıcak.
+
+Ekstra info olarakta altta harika en sağlıklı oturma zamanı. işte zaman arttıkca durumu kötüye girriğini anlatan belli aralıkları geçince atıyorum 40 dk ya saglıklı dedik 1 bucuk saaat yaptı bel agrıların olursa şaşırma gibi tatlı şeylerde olabilir. ama ben bunları su an salladım sen bunları bilimsel dayanklara göre ver internetten arastır bu konuyu biraz.
+
+Sonra kalk zamanı geldiğinde erteleme imkanı da sağlayalım alarma erteler gibi. Tabi şunu söylemeyi unuttum kalkma ayarı yaparken sunları da seçebilsin kalkmayı kaç dk ertele kaç kere ertele gibi. alarmın tamamen susması kalkma zamanı geldiğinde kalktım demesi gereksin.
+
+Bİ dene bakalım ne cıkıcak ortaya.
+
+Ama bunu yaparken tabi hem ios hem android cihazlarda her ekran size ına, her telefon sürümüne uygun bir uygulama yapmanı istiyorum. Ve benim su an windows bilgisayarda oldugumu calıstırmak iççin neler yapmam gerektiğini de uygulama hazır olduktan sonra bana yazmanı isitoyrum adım adım.
