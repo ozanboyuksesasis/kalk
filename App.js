@@ -1,113 +1,84 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet,
-  Text,
   View,
-  TouchableOpacity,
+  StyleSheet,
   Vibration,
-  Dimensions,
   Animated,
   StatusBar,
   Platform,
-  ScrollView,
   AppState,
   SafeAreaView,
   Linking,
-  Switch,
   Alert,
+  InteractionManager,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getHealthMessage } from './utils/healthMessages';
+import Header from './components/Header';
+import Menu from './components/Menu';
+import TimerScreen from './components/TimerScreen';
+import SettingsScreen from './components/SettingsScreen';
+import StatisticsScreen from './components/StatisticsScreen';
+import AlarmScreen from './components/AlarmScreen';
+import GenderSelection from './components/GenderSelection';
+import ProfileScreen from './components/ProfileScreen';
+import CustomAlert, { showAlert } from './components/CustomAlert';
 
-const { width, height } = Dimensions.get('window');
-
-// Bildirim ayarları - ön plandayken balon gösterme
+// Bildirim ayarları
 Notifications.setNotificationHandler({
-  handleNotification: async () => {
+  handleNotification: async (notification) => {
+    const isStandupNotification = notification.request.content.data?.type === 'standup';
     const appState = AppState.currentState;
+    
+    // Ayarlardan ses durumunu oku
+    let enableSound = true; // Varsayılan olarak açık
+    try {
+      const savedEnableSound = await AsyncStorage.getItem('enableSound');
+      if (savedEnableSound !== null) {
+        enableSound = savedEnableSound === 'true';
+      }
+    } catch (error) {
+      console.error('Ses ayarı okunurken hata:', error);
+    }
+    
+    if (isStandupNotification) {
+      // CASE 3: Uygulama açıkken bildirim gösterme, sadece alarm ekranı gösterilecek
+      // triggerAlarm() fonksiyonu zaten ses çalacak, bu yüzden bildirim sesi çalmasın
+      if (appState === 'active') {
+        return {
+          shouldShowAlert: false, // Bildirim gösterme
+          shouldPlaySound: false, // Uygulama açıkken bildirim sesi çalmasın (triggerAlarm zaten ses çalacak)
+          shouldSetBadge: true,
+        };
+      }
+      // CASE 1 & 2: Uygulama kapalı/kilitli - bildirim göster
+      // Bildirim sesi her zaman çalmalı (ayarlardan bağımsız)
+      return {
+        shouldShowAlert: true, // Bildirim göster
+        shouldPlaySound: true, // Bildirim sesi her zaman çal (ayarlardan bağımsız)
+        shouldSetBadge: true,
+      };
+    }
+    
+    // Diğer bildirimler için normal davranış
     if (appState === 'active') {
       return {
         shouldShowAlert: false,
-        shouldPlaySound: true,
+        shouldPlaySound: enableSound, // Ayarlara göre ses çal
         shouldSetBadge: true,
       };
     }
     return {
       shouldShowAlert: true,
-      shouldPlaySound: true,
+      shouldPlaySound: enableSound, // Ayarlara göre ses çal
       shouldSetBadge: true,
     };
   },
 });
 
-// Sağlık mesajları (bilimsel dayanaklı)
-const getHealthMessage = (minutes) => {
-  // Güvenlik kontrolü
-  if (minutes === null || minutes === undefined || isNaN(minutes)) {
-    return { message: 'Süre ayarlanmamış', color: '#999' };
-  }
-  
-  if (minutes <= 30) {
-    return { message: 'Harika! En sağlıklı oturma zamanı', color: '#4CAF50' };
-  } else if (minutes <= 40) {
-    return { message: 'İyi! Hala sağlıklı bir süre', color: '#8BC34A' };
-  } else if (minutes <= 50) {
-    return { message: 'Kabul edilebilir, ancak dikkatli olun', color: '#FFC107' };
-  } else if (minutes <= 60) {
-    return { message: 'Uzun süreli oturma, bel ağrısı riski artıyor', color: '#FF9800' };
-  } else if (minutes <= 90) {
-    return { message: 'Çok uzun süre! Bel ağrılarınız olursa şaşırmayın', color: '#FF5722' };
-  } else {
-    return { message: 'Tehlikeli! Sağlık riskleri çok yüksek', color: '#F44336' };
-  }
-};
-
-// Süreyi formatla (üstteki açıklayıcı yazı için)
-const formatTime = (minutes) => {
-  // Güvenlik kontrolü - her zaman string döndür
-  if (minutes === null || minutes === undefined || isNaN(minutes) || minutes < 0) {
-    return '0 sn sonra kalk';
-  }
-  
-  // Eğer dakika değeri ondalıklıysa (örn: 0.5 = 30 saniye)
-  if (minutes < 1) {
-    const seconds = Math.floor(minutes * 60);
-    return `${seconds} sn sonra kalk`;
-  } else if (minutes < 60) {
-    const mins = Math.floor(minutes);
-    const secs = Math.floor((minutes - mins) * 60);
-    if (secs > 0) {
-      return `${mins} dk ${secs} sn sonra kalk`;
-    }
-    return `${mins} dk sonra kalk`;
-  } else {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.floor(minutes % 60);
-    if (mins === 0) {
-      return `${hours} saat sonra kalk`;
-    }
-    return `${hours} saat ${mins} dk sonra kalk`;
-  }
-};
-
-// Geri sayım için ayrıntılı format (saat/dk/sn)
-const formatCountdown = (totalSeconds) => {
-  if (totalSeconds === null || totalSeconds === undefined || isNaN(totalSeconds) || totalSeconds < 0) {
-    return '0 sn';
-  }
-
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const parts = [];
-  if (hours > 0) parts.push(`${hours} saat`);
-  if (minutes > 0) parts.push(`${minutes} dk`);
-  parts.push(`${seconds} sn`);
-
-  return parts.join(' ');
-};
 
 export default function App() {
   const [duration, setDuration] = useState(0); // dakika cinsinden (başlangıç 0)
@@ -120,44 +91,201 @@ export default function App() {
   const [snoozeCount, setSnoozeCount] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState(null);
+  const [firstSittingDuration, setFirstSittingDuration] = useState(null); // İlk oturma süresi (dakika)
+  const [totalSittingDuration, setTotalSittingDuration] = useState(null); // Toplam oturma süresi (dakika)
+  const [showMenu, setShowMenu] = useState(false); // Hamburger menü gösterimi
+  const [showStatistics, setShowStatistics] = useState(false); // İstatistik ekranı gösterimi
+  const [showProfile, setShowProfile] = useState(false); // Profil ekranı gösterimi
+  const [statisticsRefreshKey, setStatisticsRefreshKey] = useState(0); // İstatistikleri yenilemek için key
+  const [statisticsView, setStatisticsView] = useState('today'); // İstatistik ekranı sekme seçimi ('today' veya 'all')
+  const [enableVibration, setEnableVibration] = useState(true); // Titreşim açık/kapalı
+  const [enableSound, setEnableSound] = useState(true); // Ses açık/kapalı
+  const [alarmSound, setAlarmSound] = useState('alarm1'); // Alarm sesi seçimi
+  const [gender, setGender] = useState(null); // Cinsiyet seçimi ('male' veya 'female')
+  const [showGenderSelection, setShowGenderSelection] = useState(false); // Cinsiyet seçim ekranı gösterimi
+  
+  // Mevcut alarm sesleri listesi (sounds klasöründeki dosyalara göre)
+  const availableAlarmSounds = [
+    { id: 'alarm1', label: 'Alarm 1', file: require('./assets/sounds/alarm1.wav') },
+    { id: 'alarm2', label: 'Alarm 2', file: require('./assets/sounds/alarm2.wav') },
+    { id: 'alarm3', label: 'Alarm 3', file: require('./assets/sounds/alarm3.wav') },
+  ];
   
   const intervalRef = useRef(null);
   const rotation = useRef(new Animated.Value(0)).current;
   const startTimeRef = useRef(null); // Zamanlayıcı başladığında zamanı sakla
   const initialDurationRef = useRef(null); // Başlangıç süresini sakla
   const appStateRef = useRef(AppState.currentState);
+  const soundRef = useRef(null); // Ses çalma referansı
+  const soundTimeoutRef = useRef(null); // Ses kontrol timeout referansı
+  const isAlarmStoppedRef = useRef(false); // Alarm durduruldu mu flag'i
+  const allSoundRefs = useRef([]); // TÜM ses objelerini takip et (çoklu ses objesi sorunu için)
+  const isPlayingAlarmSoundRef = useRef(false); // playAlarmSound şu anda çalışıyor mu? (çift çağrı önleme)
+  const alarmSoundRef = useRef('alarm1'); // Alarm sesi ref (closure sorunu için)
+  const enableVibrationRef = useRef(true); // Titreşim ref
+  const enableSoundRef = useRef(true); // Ses ref
+  const isAlarmRef = useRef(false); // Alarm durumu ref (hemen güncellenir, race condition önleme)
 
   // Ayarları yükle ve notification channel oluştur
   useEffect(() => {
     loadSettings();
     requestPermissions();
     
-    // Android için notification channel oluştur
+    // Android için notification channel'ları oluştur (dinamik - availableAlarmSounds'a göre)
     if (Platform.OS === 'android') {
-      Notifications.setNotificationChannelAsync('default', {
-        name: 'Kalk Hatırlatıcı',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-        sound: 'default',
+      // Her alarm sesi için channel oluştur
+      availableAlarmSounds.forEach(sound => {
+        Notifications.setNotificationChannelAsync(sound.id, {
+          name: `Kalk Hatırlatıcı - ${sound.label}`,
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 500, 200, 500, 200, 500], // Standart titreşim pattern'i
+          lightColor: '#FF231F7C',
+          sound: 'default',
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          showBadge: true,
+          enableVibrate: true,
+          enableLights: true,
+        });
       });
     }
+
   }, []);
+
+  // Timer durumunu restore etme fonksiyonu (hem uygulama açılışında hem bildirim tıklandığında kullanılacak)
+  const restoreTimerState = async (shouldTriggerAlarmIfExpired = false) => {
+    try {
+      const savedStartTime = await AsyncStorage.getItem('timerStartTime');
+      const savedInitialDuration = await AsyncStorage.getItem('timerInitialDuration');
+      const savedIsRunning = await AsyncStorage.getItem('timerIsRunning');
+      const savedSnoozeCount = await AsyncStorage.getItem('timerSnoozeCount');
+      
+      if (savedSnoozeCount) {
+        setSnoozeCount(parseInt(savedSnoozeCount));
+      }
+      
+      if (savedIsRunning === 'true' && savedStartTime && savedInitialDuration) {
+        const startTime = parseInt(savedStartTime);
+        const initialDuration = parseInt(savedInitialDuration);
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const remaining = Math.max(0, initialDuration - elapsed);
+        
+        if (remaining <= 0) {
+          // Süre dolmuş
+          console.log('⏰ Timer süresi dolmuş, kalan süre:', remaining);
+          
+          // Timer durumunu temizle
+          await AsyncStorage.removeItem('timerStartTime');
+          await AsyncStorage.removeItem('timerInitialDuration');
+          await AsyncStorage.removeItem('timerIsRunning');
+          await AsyncStorage.removeItem('timerSnoozeCount');
+          
+          // Eğer shouldTriggerAlarmIfExpired true ise alarm ekranını aç
+          if (shouldTriggerAlarmIfExpired) {
+            console.log('🚨 Süre dolmuş, alarm tetikleniyor...');
+            // BASİT: Direkt triggerAlarm çağır
+            setTimeout(async () => {
+              if (!isAlarmRef.current) {
+                await triggerAlarm();
+              }
+            }, 300);
+          } else {
+            // Timer durumunu sıfırla
+            setIsRunning(false);
+            setTimeLeft(0);
+          }
+        } else {
+          // Timer devam ediyor, kalan süreyi göster
+          console.log('⏱️ Timer devam ediyor, kalan süre:', remaining, 'saniye');
+          const initialDurationMinutes = initialDuration / 60; // dakika cinsinden
+          setIsRunning(true);
+          setTimeLeft(remaining);
+          setInitialDuration(initialDurationMinutes);
+          setDuration(initialDurationMinutes); // Halka için başlangıç süresini set et
+          startTimeRef.current = startTime;
+          initialDurationRef.current = initialDuration; // BAŞLANGIÇ süresi, kalan süre değil!
+        }
+      } else {
+        console.log('ℹ️ Timer durumu yok veya geçersiz');
+        // Timer durumu yoksa alarm tetikleme - sadece bildirim tıklama durumunda tetiklenmeli
+        // Ama burada shouldTriggerAlarmIfExpired false olmalı çünkü timer durumu yok
+      }
+    } catch (error) {
+      console.error('❌ Timer durumu restore edilirken hata:', error);
+      // Hata olursa bile shouldTriggerAlarmIfExpired true ise alarm tetikle
+      if (shouldTriggerAlarmIfExpired) {
+        console.log('🚨 Hata sonrası alarm tetikleniyor...');
+        setTimeout(async () => {
+          if (!isAlarmRef.current) {
+            await triggerAlarm();
+          }
+        }, 500);
+      }
+    }
+  };
 
   const loadSettings = async () => {
     try {
-      // Başlangıç süresini sıfırla - eski değeri yükleme
-      // const savedDuration = await AsyncStorage.getItem('duration');
       const savedSnoozeDuration = await AsyncStorage.getItem('snoozeDuration');
       const savedMaxSnoozes = await AsyncStorage.getItem('maxSnoozes');
+      const savedEnableVibration = await AsyncStorage.getItem('enableVibration');
+      const savedEnableSound = await AsyncStorage.getItem('enableSound');
+      const savedAlarmSound = await AsyncStorage.getItem('alarmSound');
+      const savedGender = await AsyncStorage.getItem('gender');
       
-      // if (savedDuration) setDuration(parseInt(savedDuration));
       setDuration(0); // Her zaman 0'dan başla
       if (savedSnoozeDuration) setSnoozeDuration(parseInt(savedSnoozeDuration));
       if (savedMaxSnoozes) setMaxSnoozes(parseInt(savedMaxSnoozes));
+      if (savedEnableVibration !== null) {
+        const vibValue = savedEnableVibration === 'true';
+        setEnableVibration(vibValue);
+        enableVibrationRef.current = vibValue;
+      }
+      if (savedEnableSound !== null) {
+        const soundValue = savedEnableSound === 'true';
+        setEnableSound(soundValue);
+        enableSoundRef.current = soundValue;
+      }
+      if (savedAlarmSound) {
+        // Kayıtlı alarm sesi availableAlarmSounds içinde var mı kontrol et
+        const isValidSound = availableAlarmSounds.some(s => s.id === savedAlarmSound);
+        if (isValidSound) {
+          setAlarmSound(savedAlarmSound);
+          alarmSoundRef.current = savedAlarmSound;
+        } else {
+          // Geçersiz ses ID'si, default olarak ilk sesi kullan
+          setAlarmSound(availableAlarmSounds[0].id);
+          alarmSoundRef.current = availableAlarmSounds[0].id;
+        }
+      } else {
+        // Hiç kayıt yoksa default olarak ilk sesi kullan
+        setAlarmSound(availableAlarmSounds[0].id);
+        alarmSoundRef.current = availableAlarmSounds[0].id;
+      }
+      
+      // Cinsiyet yükle
+      if (savedGender === 'male' || savedGender === 'female') {
+        setGender(savedGender);
+        setShowGenderSelection(false);
+      } else {
+        // Cinsiyet seçilmemişse seçim ekranını göster
+        setShowGenderSelection(true);
+      }
+      
+      // Timer durumunu restore et (uygulama açılışında alarm tetikleme)
+      await restoreTimerState(false);
+      
+      // İlk oturma süresini ve toplam oturma süresini yükle (timer çalışsa da çalışmasa da)
+      const savedFirstSittingDuration = await AsyncStorage.getItem('firstSittingDuration');
+      const savedTotalSittingDuration = await AsyncStorage.getItem('totalSittingDuration');
+      if (savedFirstSittingDuration) {
+        setFirstSittingDuration(parseFloat(savedFirstSittingDuration));
+      }
+      if (savedTotalSittingDuration) {
+        setTotalSittingDuration(parseFloat(savedTotalSittingDuration));
+      }
     } catch (error) {
       console.error('Ayarlar yüklenemedi:', error);
-      setDuration(0); // Hata durumunda da 0'dan başla
+      setDuration(0);
     }
   };
 
@@ -166,9 +294,110 @@ export default function App() {
       await AsyncStorage.setItem('duration', duration.toString());
       await AsyncStorage.setItem('snoozeDuration', snoozeDuration.toString());
       await AsyncStorage.setItem('maxSnoozes', maxSnoozes.toString());
+      await AsyncStorage.setItem('enableVibration', enableVibration.toString());
+      await AsyncStorage.setItem('enableSound', enableSound.toString());
+      await AsyncStorage.setItem('alarmSound', alarmSound);
     } catch (error) {
       console.error('Ayarlar kaydedilemedi:', error);
     }
+  };
+
+  // Günlük istatistikleri kaydet
+  const saveDailyStatistics = async (sessionData) => {
+    try {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD formatı
+      const statsKey = `dailyStats_${today}`;
+      
+      // Mevcut istatistikleri yükle
+      const existingStats = await AsyncStorage.getItem(statsKey);
+      let stats = existingStats ? JSON.parse(existingStats) : {
+        totalSittingTime: 0,
+        alarmCount: 0,
+        snoozeCount: 0,
+        sessions: [],
+      };
+      
+      // Yeni session verilerini ekle
+      stats.totalSittingTime += sessionData.totalDuration || 0;
+      stats.alarmCount += 1;
+      stats.snoozeCount += sessionData.snoozeCount || 0;
+      stats.sessions.push({
+        duration: sessionData.totalDuration || 0,
+        snoozes: sessionData.snoozeCount || 0,
+        timestamp: Date.now(),
+      });
+      
+      // Kaydet
+      await AsyncStorage.setItem(statsKey, JSON.stringify(stats));
+      
+    } catch (error) {
+      console.error('İstatistikler kaydedilemedi:', error);
+    }
+  };
+
+
+  // Tüm verileri temizle (test için)
+  const clearAllData = async () => {
+    showAlert(
+      'Verileri Temizle',
+      'Tüm istatistik verileri ve timer durumları silinecek. Bu işlem geri alınamaz. Emin misiniz?',
+      [
+        {
+          text: 'İptal',
+          style: 'cancel',
+          onPress: () => {},
+        },
+        {
+          text: 'Temizle',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Tüm günlük istatistikleri temizle
+              const keys = await AsyncStorage.getAllKeys();
+              const statsKeys = keys.filter(key => key.startsWith('dailyStats_'));
+              await AsyncStorage.multiRemove(statsKeys);
+              
+              // Timer durumlarını temizle
+              await AsyncStorage.multiRemove([
+                'timerStartTime',
+                'timerInitialDuration',
+                'timerIsRunning',
+                'timerSnoozeCount',
+                'firstSittingDuration',
+                'totalSittingDuration',
+              ]);
+              
+              // State'leri sıfırla
+              setSnoozeCount(0);
+              setFirstSittingDuration(null);
+              setTotalSittingDuration(null);
+              setDuration(0);
+              setIsRunning(false);
+              setTimeLeft(null);
+              setInitialDuration(null);
+              
+              // Scheduled notification'ları iptal et
+              await Notifications.cancelAllScheduledNotificationsAsync();
+              
+              showAlert('Başarılı', 'Tüm veriler temizlendi.', [
+                {
+                  text: 'Tamam',
+                  onPress: () => {},
+                },
+              ]);
+            } catch (error) {
+              console.error('Veriler temizlenirken hata:', error);
+              showAlert('Hata', 'Veriler temizlenirken bir hata oluştu.', [
+                {
+                  text: 'Tamam',
+                  onPress: () => {},
+                },
+              ]);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Bildirim izinlerini ayarlar ekranından yönetmek için yardımcı fonksiyonlar
@@ -176,15 +405,27 @@ export default function App() {
     try {
       const settings = await Notifications.getPermissionsAsync();
       setNotificationStatus(settings?.status || null);
-      Alert.alert(
+      showAlert(
         'Bildirim izni',
         `Şu anki bildirim izni durumu: ${settings?.status || 'bilinmiyor'}.`,
+        [
+          {
+            text: 'Tamam',
+            onPress: () => {},
+          },
+        ]
       );
     } catch (e) {
       console.error('Bildirim izni durumu alınamadı:', e);
-      Alert.alert(
+      showAlert(
         'Bildirim izni',
         'Bildirim izni durumu alınamadı. Lütfen daha sonra tekrar dene.',
+        [
+          {
+            text: 'Tamam',
+            onPress: () => {},
+          },
+        ]
       );
     }
   };
@@ -194,21 +435,39 @@ export default function App() {
       const { status } = await Notifications.requestPermissionsAsync();
       setNotificationStatus(status);
       if (status === 'granted') {
-        Alert.alert(
+        showAlert(
           'Bildirim izni',
           'Bildirim izni verildi. Arka planda kalkma uyarıları gönderilebilecek. ✅',
+          [
+            {
+              text: 'Tamam',
+              onPress: () => {},
+            },
+          ]
         );
       } else {
-        Alert.alert(
+        showAlert(
           'Bildirim izni',
           'Bildirim izni verilemedi. İstersen cihaz ayarlarından daha sonra açabilirsin.',
+          [
+            {
+              text: 'Tamam',
+              onPress: () => {},
+            },
+          ]
         );
       }
     } catch (e) {
       console.error('Bildirim izni yeniden istenirken hata:', e);
-      Alert.alert(
+      showAlert(
         'Bildirim izni',
         'Bildirim izni istenirken bir hata oluştu. Lütfen daha sonra tekrar dene.',
+        [
+          {
+            text: 'Tamam',
+            onPress: () => {},
+          },
+        ]
       );
     }
   };
@@ -218,103 +477,247 @@ export default function App() {
       await Linking.openSettings();
     } catch (e) {
       console.error('Sistem ayarları açılamadı:', e);
-      Alert.alert(
+      showAlert(
         'Sistem ayarları',
         'Sistem ayarları açılamadı. Lütfen cihaz ayarlarından uygulamayı elle aç ve izinleri güncelle.',
+        [
+          {
+            text: 'Tamam',
+            onPress: () => {},
+          },
+        ]
       );
     }
   };
 
   const requestPermissions = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    setNotificationStatus(status);
-    if (status !== 'granted') {
-      if (Platform.OS === 'ios') {
-        Alert.alert(
-          'Bildirim izni gerekli',
-          'Arka planda kalkma uyarısı gönderebilmemiz için bildirim iznine ihtiyacımız var. Lütfen izin ver.',
-        );
+    try {
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowAnnouncements: false,
+        },
+      });
+      setNotificationStatus(status);
+      if (status !== 'granted') {
+        if (Platform.OS === 'ios') {
+          showAlert(
+            'Bildirim izni gerekli',
+            'Arka planda kalkma uyarısı gönderebilmemiz için bildirim iznine ihtiyacımız var. Lütfen izin ver.',
+            [
+              {
+                text: 'Tamam',
+                onPress: () => {},
+              },
+            ]
+          );
+        } else {
+          // Android'de hata gibi algılanmasın diye sadece logluyoruz
+          console.warn('Bildirim izni verilmedi. Arka planda uyarılar çalışmayabilir.');
+        }
       } else {
-        // Android'de hata gibi algılanmasın diye sadece logluyoruz
-        console.warn('Bildirim izni verilmedi. Arka planda uyarılar çalışmayabilir.');
+        console.log('Bildirim izni verildi:', status);
       }
+    } catch (error) {
+      console.error('Bildirim izni istenirken hata:', error);
     }
   };
 
   // AppState değişikliklerini dinle (arka plan/ön plan)
+  // OPTİMİZE: Timer interval'ini de yönetiyor (battery optimization)
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', nextAppState => {
-      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
-        // Uygulama ön plana geldiğinde kalan süreyi hesapla
-        if (isRunning && startTimeRef.current && initialDurationRef.current) {
-          const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-          const remaining = Math.max(0, initialDurationRef.current - elapsed);
-          
-          if (remaining <= 0) {
-            triggerAlarm();
-          } else {
-            setTimeLeft(remaining);
-          }
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      const prevAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+      
+      if (prevAppState.match(/inactive|background/) && nextAppState === 'active') {
+        // Uygulama ön plana geldiğinde (background'dan veya kapalı durumdan)
+        console.log('📱 Uygulama ön plana geldi (background/inactive -> active)');
+        
+        // Timer durumunu restore et (AMA alarm tetikleme - sadece timer devam etsin)
+        // shouldTriggerAlarmIfExpired: false - çünkü bu normal arka plan/ön plan geçişi
+        // restoreTimerState zaten kalan süreyi hesaplayıp setTimeLeft yapıyor, ekstra hesaplama gerekmez
+        await restoreTimerState(false);
+        
+        // Timer çalışıyorsa ve interval yoksa yeniden başlat (arka planda durdurulmuş olabilir)
+        if (isRunning && startTimeRef.current && initialDurationRef.current && !intervalRef.current && !isAlarm) {
+          const updateTimer = () => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTimeRef.current) / 1000);
+            const remaining = Math.max(0, initialDurationRef.current - elapsed);
+            
+            if (remaining <= 0) {
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+              triggerAlarm();
+              setTimeLeft(0);
+            } else {
+              setTimeLeft((prev) => (prev === remaining ? prev : remaining));
+            }
+          };
+          updateTimer(); // Hemen güncelle
+          intervalRef.current = setInterval(updateTimer, 1000);
+        }
+      } else if (prevAppState === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
+        // Arka plana geçtiğinde interval'i durdur (battery optimization)
+        // Timer state AsyncStorage'da zaten kayıtlı, notification zaten planlanmış
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
       }
-      appStateRef.current = nextAppState;
     });
 
     return () => {
       subscription.remove();
     };
-  }, [isRunning]);
+  }, [isRunning, isAlarm]); // isRunning ve isAlarm dependency'leri eklendi - timer durumu değiştiğinde listener'ı güncelle
 
   // Uygulama açıkken görsel geri sayım için zamanlayıcı
+  // OPTİMİZE EDİLMİŞ: Date.now() tabanlı gerçek zaman hesaplama, sistem kaynaklarından az etkilenir
   useEffect(() => {
-    if (isRunning && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            triggerAlarm();
-            return 0;
+    // Eğer alarm açıksa interval başlatma
+    if (isAlarm) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+    
+    if (isRunning && startTimeRef.current && initialDurationRef.current) {
+      // OPTİMİZE: timeLeft dependency'sini kaldırdık, sadece isRunning ve isAlarm kontrol ediliyor
+      // Bu sayede her saniye re-render olmuyor, sadece gerçek zaman hesaplaması yapılıyor
+      
+      // İlk güncellemeyi hemen yap (gecikme olmadan)
+      const updateTimer = () => {
+        // Gerçek zamanı hesapla (Date.now() tabanlı - sistem saatinden bağımsız, çok hassas)
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTimeRef.current) / 1000);
+        const remaining = Math.max(0, initialDurationRef.current - elapsed);
+        
+        if (remaining <= 0) {
+          // Süre doldu, alarm tetikle
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
           }
-          return prev - 1;
-        });
-      }, 1000);
+          // Alarm zaten açıksa tekrar tetikleme
+          if (!isAlarmRef.current) {
+            triggerAlarm();
+          }
+          setTimeLeft(0);
+        } else {
+          // Sadece saniye değiştiyse state'i güncelle (gereksiz re-render'ları önle)
+          setTimeLeft((prev) => {
+            // Eğer aynı saniyeyse güncelleme yapma (performans optimizasyonu)
+            if (prev === remaining) {
+              return prev;
+            }
+            return remaining;
+          });
+        }
+      };
+      
+      // İlk güncellemeyi hemen yap
+      updateTimer();
+      
+      // Platform-specific interval optimizasyonu
+      // iOS ve Android için optimize edilmiş interval
+      // requestAnimationFrame kullanmak yerine setInterval kullanıyoruz çünkü:
+      // 1. requestAnimationFrame ekran yenileme hızına bağlı (60fps = 16ms), timer için uygun değil
+      // 2. setInterval ile 1000ms interval daha doğru ve tahmin edilebilir
+      // 3. Date.now() tabanlı hesaplama sayesinde interval gecikmeleri telafi ediliyor
+      
+      // Interval'i başlat (1000ms = 1 saniye)
+      // NOT: setInterval her zaman tam 1000ms olmayabilir (JavaScript event loop gecikmeleri)
+      // Ama Date.now() tabanlı hesaplama sayesinde bu gecikmeler telafi ediliyor
+      intervalRef.current = setInterval(updateTimer, 1000);
+      
+      // Arka plan optimizasyonu: Mevcut AppState listener zaten interval'i yönetiyor
+      // Bu yüzden burada ayrı bir listener eklemiyoruz
+      
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      };
     } else {
+      // Timer çalışmıyorsa interval'i temizle
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     }
+  }, [isRunning, isAlarm]); // timeLeft dependency'sini kaldırdık - performans optimizasyonu
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isRunning, timeLeft]);
-
-  // Uygulama arka plana geçtiğinde veya kapandığında notification'ı kontrol et
+  // Scheduled notification'ları dinle (arka planda veya ön planda)
   useEffect(() => {
-    // Uygulama açıkken notification geldiğinde
+    // CASE 3: Uygulama açıkken notification geldiğinde alarm ekranını aç
     const receivedSubscription = Notifications.addNotificationReceivedListener(async (notification) => {
+      console.log('Notification alındı:', notification.request.content.data?.type);
       if (notification.request.content.data?.type === 'standup') {
-        setIsRunning(false);
-        setIsAlarm(true);
-        setTimeLeft(0);
+        const currentAppState = AppState.currentState;
         
-        // Titreşim
-        if (Platform.OS === 'ios') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } else {
-          Vibration.vibrate([0, 500, 200, 500, 200, 500], true);
+        // CASE 3: Uygulama açıkken - bildirim gösterme, sadece alarm ekranı
+        if (currentAppState === 'active') {
+          console.log('CASE 3: Uygulama açık, alarm ekranı gösteriliyor (bildirim yok)');
+          
+          // Bildirimi kapat (uygulama açıkken gösterilmeyecek)
+          const notificationId = notification.request.identifier;
+          try {
+            await Notifications.dismissNotificationAsync(notificationId);
+          } catch (error) {
+            console.error('Bildirim kapatılırken hata:', error);
+          }
+          
+          // triggerAlarm fonksiyonunu çağır (ses ve titreşim için)
+          if (!isAlarmRef.current) {
+            triggerAlarm();
+          }
         }
+        // CASE 1 & 2: Uygulama kapalı/kilitli - bildirim gösterilecek, butonlarla çalışacak
+        // Notification handler'da shouldShowAlert: true ile bildirim gösterilecek
       }
     });
 
-    // Uygulama kapalıyken notification'a tıklandığında
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      if (response.notification.request.content.data?.type === 'standup') {
-        setIsRunning(false);
-        setIsAlarm(true);
-        setTimeLeft(0);
+    // CASE 1 & 2: Uygulama kapalıyken notification'a tıklandığında
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
+      console.log('📱 Notification\'a tıklandı:', response.notification.request.content.data?.type);
+      const notificationData = response.notification.request.content.data;
+      
+      if (notificationData?.type === 'standup') {
+        // Bildirimi kapat
+        const notificationId = response.notification.request.identifier;
+        try {
+          await Notifications.dismissNotificationAsync(notificationId);
+        } catch (error) {
+          console.error('Bildirim kapatılırken hata:', error);
+        }
+        
+        // BASİT ÇÖZÜM: Bildirim tıklandığında direkt alarm tetikle
+        // Timer zaten dolmuş, sadece alarm ekranını aç
+        console.log('📱 Bildirim tıklandı, alarm tetikleniyor...');
+        
+        // ÖNEMLİ: Bildirim sesini durdur (bildirim tıklandığında sistem sesi çalıyor olabilir)
+        // Tüm aktif bildirimleri dismiss et
+        try {
+          await Notifications.dismissAllNotificationsAsync();
+        } catch (e) {
+          // Hata olsa bile devam et
+        }
+        
+        // Kısa bir gecikme ile triggerAlarm çağır (uygulama açılmasını bekle)
+        setTimeout(async () => {
+          if (!isAlarmRef.current) {
+            await triggerAlarm();
+          }
+        }, 300);
       }
     });
 
@@ -322,66 +725,465 @@ export default function App() {
       receivedSubscription.remove();
       responseSubscription.remove();
     };
-  }, []);
+  }, [snoozeDuration]); // snoozeDuration dependency olarak eklendi
 
   const triggerAlarm = async () => {
+    // BASİT: Alarm zaten açıksa tekrar tetikleme
+    if (isAlarmRef.current) {
+      console.log('⚠️ Alarm zaten açık, tekrar tetiklenmiyor');
+      return;
+    }
+    
+    console.log('🚨 triggerAlarm çağrıldı');
+    
+    // Önce interval'ı durdur (timer durmalı)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      console.log('⏹️ Interval durduruldu (triggerAlarm)');
+    }
+    
+    // Özet bilgileri yükle
+    let savedSnoozeCount = 0;
+    let savedFirstSittingDuration = null;
+    let savedTotalSittingDuration = null;
+    try {
+      const savedSnooze = await AsyncStorage.getItem('timerSnoozeCount');
+      const savedFirst = await AsyncStorage.getItem('firstSittingDuration');
+      const savedTotal = await AsyncStorage.getItem('totalSittingDuration');
+      if (savedSnooze) {
+        savedSnoozeCount = parseInt(savedSnooze);
+      }
+      if (savedFirst) {
+        savedFirstSittingDuration = parseFloat(savedFirst);
+      }
+      if (savedTotal) {
+        savedTotalSittingDuration = parseFloat(savedTotal);
+      }
+    } catch (error) {
+      console.error('Özet bilgiler yüklenirken hata:', error);
+    }
+    
     setIsRunning(false);
     setIsAlarm(true);
+    isAlarmRef.current = true; // Ref'i hemen güncelle
     setTimeLeft(0);
+    setSnoozeCount(savedSnoozeCount);
+    setFirstSittingDuration(savedFirstSittingDuration);
+    setTotalSittingDuration(savedTotalSittingDuration);
     startTimeRef.current = null;
     initialDurationRef.current = null;
 
-    // Titreşim - tekrarlayan titreşim
-    if (Platform.OS === 'ios') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Ayarları AsyncStorage'dan direkt oku (her zaman güncel garantisi)
+    let currentEnableVibration = true;
+    let currentEnableSound = true;
+    let currentAlarmSound = 'alarm1';
+    
+    try {
+      const savedAlarmSound = await AsyncStorage.getItem('alarmSound');
+      if (savedAlarmSound) {
+        currentAlarmSound = savedAlarmSound;
+        alarmSoundRef.current = savedAlarmSound; // Ref'i de güncelle
+      } else {
+        currentAlarmSound = alarmSoundRef.current || 'alarm1';
+      }
+      
+      const savedEnableVibration = await AsyncStorage.getItem('enableVibration');
+      if (savedEnableVibration !== null) {
+        currentEnableVibration = savedEnableVibration === 'true';
+        enableVibrationRef.current = currentEnableVibration;
+      } else {
+        currentEnableVibration = enableVibrationRef.current;
+      }
+      
+      const savedEnableSound = await AsyncStorage.getItem('enableSound');
+      if (savedEnableSound !== null) {
+        currentEnableSound = savedEnableSound === 'true';
+        enableSoundRef.current = currentEnableSound;
+      } else {
+        currentEnableSound = enableSoundRef.current;
+      }
+    } catch (error) {
+      console.error('Ayarlar yüklenirken hata:', error);
+      // Hata olursa ref'lerden oku
+      currentEnableVibration = enableVibrationRef.current;
+      currentEnableSound = enableSoundRef.current;
+      currentAlarmSound = alarmSoundRef.current || 'alarm1';
+    }
+    
+    console.log('📋 triggerAlarm - Ayarlar (AsyncStorage):', {
+      enableVibration: currentEnableVibration,
+      enableSound: currentEnableSound,
+      alarmSound: currentAlarmSound,
+    });
+
+    // Titreşim - ayarlara göre
+    console.log('📳 triggerAlarm - Titreşim kontrolü - enableVibration:', currentEnableVibration);
+    if (currentEnableVibration) {
+      console.log('✅ Titreşim açık, titreşim başlatılıyor...');
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        // Standart titreşim pattern'i (her ses için aynı)
+        const vibrationPattern = [0, 500, 200, 500, 200, 500];
+        Vibration.vibrate(vibrationPattern, true); // true = tekrarla
+      }
     } else {
-      Vibration.vibrate([0, 500, 200, 500, 200, 500], true); // true = tekrarla
+      console.log('🔇 Titreşim kapalı, titreşim çalınmayacak');
+    }
+    
+    // Ses çal - ayarlara göre
+    console.log('🔊 triggerAlarm - Ses kontrolü - enableSound:', currentEnableSound);
+    if (currentEnableSound) {
+      console.log('✅ Ses açık, playAlarmSound çağrılıyor...');
+      // playAlarmSound'e alarmSound'i parametre olarak geç
+      await playAlarmSound(currentAlarmSound, currentEnableSound);
+    } else {
+      console.log('🔇 Ses kapalı, ses çalınmayacak');
+    }
+    
+    // Scheduled notification zaten planlanmış, arka planda kendisi tetiklenecek
+    // Uygulama açıkken bu fonksiyon çağrıldığında sadece alarm ekranını gösteriyoruz
+  };
+
+  // Alarm sesi çalma fonksiyonu (test için)
+  const playTestSound = async (soundType = null) => {
+    try {
+      // Ses kapalıysa çalma
+      if (!enableSound) {
+        console.log('🔇 Ses kapalı, test sesi çalınmayacak');
+        return;
+      }
+
+      // Parametre verilmediyse state'den al
+      const currentSoundType = soundType !== null ? soundType : alarmSound;
+      
+      // availableAlarmSounds listesinden ses dosyasını bul
+      const selectedSound = availableAlarmSounds.find(s => s.id === currentSoundType) || availableAlarmSounds[0];
+      const alarmName = selectedSound.label;
+      console.log('🔊 Test sesi çalınıyor:', alarmName, 'ID:', currentSoundType, 'Parametre:', soundType);
+      
+      // Önceki sesi durdur
+      if (soundRef.current) {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      // Ses modunu ayarla
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+      });
+
+      // Ses dosyasını yükle ve çal
+      try {
+        const soundUri = selectedSound.file;
+
+        const { sound } = await Audio.Sound.createAsync(
+          soundUri,
+          { 
+            shouldPlay: true,
+            isLooping: false, // Test için tek seferlik çal
+            volume: 1.0,
+          }
+        );
+        
+        soundRef.current = sound;
+        console.log('✅ Alarm sesi yüklendi ve çalınıyor:', alarmName);
+        
+        // 3 saniye sonra otomatik durdur
+        setTimeout(async () => {
+          if (soundRef.current === sound) {
+            try {
+              await sound.stopAsync();
+              await sound.unloadAsync();
+              soundRef.current = null;
+              console.log('⏹️ Test sesi 3 saniye sonra durduruldu');
+            } catch (error) {
+              console.error('Ses durdurulurken hata:', error);
+            }
+          }
+        }, 3000); // 3 saniye
+        
+        // Ses bittiğinde temizle
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            sound.unloadAsync();
+            soundRef.current = null;
+          }
+        });
+      } catch (soundError) {
+        console.error('❌ Ses dosyası yüklenirken hata:', soundError);
+        console.log('⚠️ Bildirim sesi kullanılıyor');
+        // Ses dosyası yoksa bildirim sesi kullan
+        const selectedSound = availableAlarmSounds.find(s => s.id === soundType) || availableAlarmSounds[0];
+        const channelId = selectedSound.id;
+        const alarmName = selectedSound.label;
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🔊 Test Sesi',
+            body: `${alarmName} test ediliyor`,
+            sound: true,
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+            channelId: channelId,
+          },
+          trigger: {
+            type: 'timeInterval',
+            seconds: 1,
+          },
+        });
+      }
+      
+      // iOS için haptic feedback
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.error('Test sesi çalınırken hata:', error);
+    }
+  };
+
+  // Alarm sesi çalma fonksiyonu - BASİT VERSİYON
+  const playAlarmSound = async (soundType = null, soundEnabled = null) => {
+    // ÇİFT ÇAĞRI ÖNLEME: Eğer zaten çalışıyorsa bekle
+    if (isPlayingAlarmSoundRef.current) {
+      console.log('⚠️ playAlarmSound zaten çalışıyor, bekleniyor...');
+      // Önceki çağrının bitmesini bekle
+      while (isPlayingAlarmSoundRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return;
+    }
+    
+    isPlayingAlarmSoundRef.current = true;
+    
+    try {
+      // Parametreler verilmediyse state'den al
+      const currentAlarmSound = soundType !== null ? soundType : alarmSound;
+      const currentEnableSound = soundEnabled !== null ? soundEnabled : enableSound;
+      
+      // Ses kapalıysa çalma
+      if (!currentEnableSound) {
+        isPlayingAlarmSoundRef.current = false;
+        return;
+      }
+      
+      // ÖNEMLİ: ÖNCE TÜM SES OBJELERİNİ DURDUR (çoklu ses objesi sorunu için)
+      console.log('🔇 Önceki tüm sesler durduruluyor...');
+      
+      // soundRef.current'ı durdur
+      if (soundRef.current) {
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch (e) {}
+        soundRef.current = null;
+      }
+      
+      // allSoundRefs'teki TÜM ses objelerini durdur
+      for (const sound of allSoundRefs.current) {
+        try {
+          const status = await sound.getStatusAsync();
+          if (status.isLoaded && status.isPlaying) {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+          }
+        } catch (e) {
+          // Hata olsa bile devam et
+        }
+      }
+      allSoundRefs.current = []; // Listeyi temizle
+
+      // Ses modunu ayarla
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: false,
+        allowsRecordingIOS: false,
+      });
+
+      // Ses dosyasını bul
+      const selectedSound = availableAlarmSounds.find(s => s.id === currentAlarmSound) || availableAlarmSounds[0];
+      const soundUri = selectedSound.file;
+      console.log('🔊 Ses çalınıyor:', selectedSound.label, 'ID:', currentAlarmSound);
+      
+      // Alarm durduruldu flag'ini sıfırla
+      isAlarmStoppedRef.current = false;
+      
+      // Ses çal - BASİT: Sadece createAsync, isLooping: true
+      const { sound } = await Audio.Sound.createAsync(
+        soundUri,
+        { 
+          shouldPlay: true,
+          isLooping: true,
+          volume: 1.0,
+        }
+      );
+      
+      soundRef.current = sound;
+      allSoundRefs.current.push(sound); // Tüm ses objelerini takip et
+      console.log('✅ Ses objesi kaydedildi, toplam ses sayısı:', allSoundRefs.current.length);
+      
+    } catch (soundError) {
+      console.error('❌ Ses çalma hatası:', soundError);
+    } finally {
+      isPlayingAlarmSoundRef.current = false;
+    }
+  };
+
+  // Alarm sesini durdurma fonksiyonu - BASİT: TÜM ses objelerini bul, durdur, kill et
+  const stopAlarmSound = async () => {
+    console.log('🔇 stopAlarmSound çağrıldı');
+    
+    // Flag set et
+    isAlarmStoppedRef.current = true;
+    
+    // Timeout iptal et
+    if (soundTimeoutRef.current) {
+      clearTimeout(soundTimeoutRef.current);
+      soundTimeoutRef.current = null;
+    }
+    
+    // ÖNEMLİ: Bildirim sesini de durdur (bildirimden gelince sistem sesi çalıyor olabilir)
+    try {
+      await Notifications.dismissAllNotificationsAsync();
+      console.log('✅ Bildirimler dismiss edildi');
+    } catch (e) {
+      console.log('⚠️ Bildirim dismiss hatası:', e);
+    }
+    
+    // ÖNEMLİ: TÜM SES OBJELERİNİ DURDUR (çoklu ses objesi sorunu için)
+    console.log('🔍 Tüm ses objeleri durduruluyor, toplam:', allSoundRefs.current.length + (soundRef.current ? 1 : 0));
+    
+    // soundRef.current'ı durdur
+    if (soundRef.current) {
+      try {
+        const status = await soundRef.current.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await soundRef.current.stopAsync();
+        }
+        await soundRef.current.unloadAsync();
+        console.log('✅ soundRef.current durduruldu');
+      } catch (e) {
+        console.error('❌ soundRef.current durdurma hatası:', e);
+      }
+      soundRef.current = null;
+    }
+    
+    // allSoundRefs'teki TÜM ses objelerini durdur
+    for (const sound of allSoundRefs.current) {
+      try {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+          console.log('✅ Ek ses objesi durduruldu');
+        }
+      } catch (e) {
+        console.error('❌ Ek ses objesi durdurma hatası:', e);
+      }
+    }
+    allSoundRefs.current = []; // Listeyi temizle
+    
+    // Audio modunu sıfırla
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        allowsRecordingIOS: false,
+      });
+      console.log('✅ Audio modu sıfırlandı');
+    } catch (e) {
+      console.log('⚠️ Audio modu sıfırlama hatası:', e);
+    }
+  };
+
+  // Notification içeriği oluşturma helper fonksiyonu
+  const createStandupNotificationContent = () => {
+    // Ses seçimine göre channel ID belirle - alarmSound ID'si direkt channel ID olarak kullanılır
+    const channelId = alarmSound;
+    
+    const baseContent = {
+      title: 'Kalkma Zamanı! 🚶',
+      body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+      sound: enableSound, // Ayarlardan gelen ses ayarı
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      channelId: channelId, // Seçilen ses tipine göre channel
+      // categoryIdentifier kaldırıldı - butonlar yok
+      data: { 
+        type: 'standup',
+        action: 'open_alarm',
+        timestamp: Date.now(),
+      },
+    };
+
+    // iOS için badge ekle
+    if (Platform.OS === 'ios') {
+      return {
+        ...baseContent,
+        badge: 1,
+      };
     }
 
-    // Uygulama arka plandayken bildirim göster (ön planda ekran zaten açık)
-    const appState = AppState.currentState;
-    if (appState !== 'active') {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Kalkma Zamanı! 🚶',
-          body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-          channelId: 'default',
-        },
-        trigger: null,
-      });
-    }
+    // Android için
+    return baseContent;
   };
 
   const startTimer = async () => {
     if (duration > 0) {
       const seconds = Math.floor(duration * 60);
+      const startTime = Date.now();
+      
       setTimeLeft(seconds);
       setIsRunning(true);
       setIsAlarm(false);
+      isAlarmRef.current = false;
       setSnoozeCount(0);
       setInitialDuration(duration); // Başlangıç süresini kaydet (dakika cinsinden)
-      startTimeRef.current = Date.now(); // Başlangıç zamanını kaydet
+      startTimeRef.current = startTime; // Başlangıç zamanını kaydet
       initialDurationRef.current = seconds; // Başlangıç süresini kaydet (saniye cinsinden)
-      saveSettings();
+      
+      // İlk oturma süresini ve toplam oturma süresini kaydet
+      setFirstSittingDuration(duration);
+      setTotalSittingDuration(duration);
+      
+      // Timer durumunu AsyncStorage'a kaydet (uygulama kapalıyken devam etmesi için)
+      try {
+        await AsyncStorage.setItem('timerStartTime', startTime.toString());
+        await AsyncStorage.setItem('timerInitialDuration', seconds.toString());
+        await AsyncStorage.setItem('timerIsRunning', 'true');
+        await AsyncStorage.setItem('timerSnoozeCount', '0');
+        await AsyncStorage.setItem('firstSittingDuration', duration.toString());
+        await AsyncStorage.setItem('totalSittingDuration', duration.toString());
+      } catch (error) {
+        console.error('Timer durumu kaydedilemedi:', error);
+      }
+      
+      // saveSettings() kaldırıldı - sadece "Kaydet" butonuna basıldığında kaydedilecek
 
-      // Arka plan için scheduled notification oluştur
+      // Bildirim gönder (hem Android hem iOS için)
       await Notifications.cancelAllScheduledNotificationsAsync();
       
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Kalkma Zamanı! 🚶',
-          body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-          channelId: 'default',
-          data: { type: 'standup' },
-        },
-        trigger: {
-          seconds: seconds,
-        },
-      });
+      // Saniye değerinin geçerli olduğundan emin ol
+      if (seconds > 0 && !isNaN(seconds)) {
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: createStandupNotificationContent(),
+            trigger: {
+              type: 'timeInterval',
+              seconds: Math.max(1, Math.floor(seconds)),
+            },
+          });
+          console.log(`Alarm planlandı: ${seconds} saniye sonra (${Platform.OS})`);
+        } catch (error) {
+          console.error('Alarm planlanırken hata:', error);
+        }
+      } else {
+        console.warn('Geçersiz süre değeri, alarm planlanamadı:', seconds);
+      }
     }
   };
 
@@ -389,68 +1191,159 @@ export default function App() {
     setIsRunning(false);
     setTimeLeft(null);
     setIsAlarm(false);
+    isAlarmRef.current = false;
     setSnoozeCount(0);
     setInitialDuration(null); // Başlangıç süresini sıfırla
+    setFirstSittingDuration(null);
+    setTotalSittingDuration(null);
     startTimeRef.current = null;
     initialDurationRef.current = null;
+    
+    // Timer durumunu AsyncStorage'dan sil
+    try {
+      await AsyncStorage.removeItem('timerStartTime');
+      await AsyncStorage.removeItem('timerInitialDuration');
+      await AsyncStorage.removeItem('timerIsRunning');
+      await AsyncStorage.removeItem('timerSnoozeCount');
+      await AsyncStorage.removeItem('firstSittingDuration');
+      await AsyncStorage.removeItem('totalSittingDuration');
+    } catch (error) {
+      console.error('Timer durumu silinemedi:', error);
+    }
+    
     // Scheduled notification'ları iptal et
     await Notifications.cancelAllScheduledNotificationsAsync();
+    
     if (Platform.OS === 'android') {
       Vibration.cancel();
     }
   };
 
-  const handleStandUp = async () => {
-    // Önce titreşimi durdur
+  const handleStandUp = () => {
+    console.log('✅ App.js handleStandUp çağrıldı - Kalktım butonuna basıldı');
+    
+    // HEMEN: Alarm durumunu kapat (UI hemen güncellensin)
+    isAlarmRef.current = false;
+    setIsAlarm(false);
+    setIsRunning(false);
+    
+    // HEMEN: Titreşimi durdur
     if (Platform.OS === 'android') {
       Vibration.cancel();
     }
-    await stopTimer();
+    
+    // HEMEN: Ses durdurma (non-blocking)
+    stopAlarmSound().catch(err => console.error('Ses durdurma hatası:', err));
+    
+    // ARKA PLANDA: İstatistikleri kaydet (UI'ı bloklamadan)
+    if (totalSittingDuration !== null && totalSittingDuration > 0) {
+      saveDailyStatistics({
+        totalDuration: totalSittingDuration,
+        snoozeCount: snoozeCount || 0,
+      }).then(() => {
+        console.log('📊 İstatistikler kaydedildi');
+        // İstatistikler kaydedildikten sonra refresh key'i artır (ekran açıksa yenilenecek)
+        setStatisticsRefreshKey(prev => prev + 1);
+      }).catch(err => {
+        console.error('İstatistik kaydetme hatası:', err);
+      });
+    }
+    
+    // ARKA PLANDA: Timer durdur (UI'ı bloklamadan)
+    stopTimer().then(() => {
+      console.log('⏹️ Timer durduruldu');
+    }).catch(err => {
+      console.error('Timer durdurma hatası:', err);
+    });
+    
+    // Haptic feedback
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    
+    console.log('✅ handleStandUp tamamlandı');
   };
 
-  const handleSnooze = async () => {
+  const handleSnooze = () => {
     if (snoozeCount < maxSnoozes) {
-      // Önce titreşimi durdur
+      // HEMEN: Titreşimi durdur
       if (Platform.OS === 'android') {
         Vibration.cancel();
       }
       
-      setSnoozeCount(snoozeCount + 1);
+      const newSnoozeCount = snoozeCount + 1;
       const seconds = Math.floor(snoozeDuration * 60);
+      const startTime = Date.now();
+      
+      // Toplam oturma süresine erteleme süresini ekle
+      const newTotalSittingDuration = (totalSittingDuration || 0) + snoozeDuration;
+      
+      setSnoozeCount(newSnoozeCount);
       setTimeLeft(seconds);
       setIsRunning(true);
       setIsAlarm(false);
+      isAlarmRef.current = false; // Ref'i de güncelle
       setInitialDuration(snoozeDuration); // Erteleme süresini initialDuration olarak ayarla
-      startTimeRef.current = Date.now(); // Yeni başlangıç zamanı
+      setTotalSittingDuration(newTotalSittingDuration);
+      startTimeRef.current = startTime; // Yeni başlangıç zamanı
       initialDurationRef.current = seconds; // Yeni başlangıç süresi (saniye cinsinden)
       
-      // Yeni erteleme için notification planla
-      await Notifications.cancelAllScheduledNotificationsAsync();
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Kalkma Zamanı! 🚶',
-          body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-          channelId: 'default',
-          data: { type: 'standup' },
-        },
-        trigger: {
-          seconds: seconds,
-        },
-      });
+      // ARKA PLANDA: Ses durdurma (non-blocking)
+      stopAlarmSound().catch(err => console.error('Ses durdurma hatası:', err));
+      
+      // ARKA PLANDA: Timer durumunu AsyncStorage'a kaydet (UI'ı bloklamadan)
+      (async () => {
+        try {
+          await AsyncStorage.setItem('timerStartTime', startTime.toString());
+          await AsyncStorage.setItem('timerInitialDuration', seconds.toString());
+          await AsyncStorage.setItem('timerIsRunning', 'true');
+          await AsyncStorage.setItem('timerSnoozeCount', newSnoozeCount.toString());
+          if (firstSittingDuration !== null) {
+            await AsyncStorage.setItem('firstSittingDuration', firstSittingDuration.toString());
+          }
+          await AsyncStorage.setItem('totalSittingDuration', newTotalSittingDuration.toString());
+        } catch (error) {
+          console.error('Timer durumu kaydedilemedi:', error);
+        }
+      })();
+      
+      // ARKA PLANDA: Yeni erteleme için notification planla (UI'ı bloklamadan)
+      (async () => {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        
+        // Saniye değerinin geçerli olduğundan emin ol
+        if (seconds > 0 && !isNaN(seconds)) {
+          try {
+            await Notifications.scheduleNotificationAsync({
+              content: createStandupNotificationContent(),
+              trigger: {
+                type: 'timeInterval',
+                seconds: Math.max(1, Math.floor(seconds)),
+              },
+            });
+            console.log(`Erteleme bildirimi planlandı: ${seconds} saniye sonra (${Platform.OS})`);
+          } catch (error) {
+            console.error('Erteleme bildirimi planlanırken hata:', error);
+          }
+        } else {
+          console.warn('Geçersiz erteleme süresi, bildirim planlanamadı:', seconds);
+        }
+      })();
     }
     // Erteleme hakkı bittiyse artık sadece "Kalktım" butonu gösterilecek,
     // ekstra uyarı göstermeye gerek yok.
   };
 
-  // +/- butonları için handler'lar (test için 30 saniye)
+  // +/- butonları için handler'lar (test için 10 saniye)
   const handleIncrease = () => {
     if (!isRunning && !isAlarm) {
-      setDuration(Math.min(180, duration + 0.5)); // 0.5 dakika = 30 saniye
+      // Saniye cinsinden hesapla, sonra dakikaya çevir (yuvarlama hatası önlemek için)
+      // duration'ı saniyeye çevirirken tam sayıya yuvarla (1dk 10sn = 70 saniye)
+      const currentSeconds = Math.round((duration || 0) * 60); // Tam saniye değerini al
+      const newSeconds = Math.min(180 * 60, currentSeconds + 10); // 10 saniye ekle, max 180 dakika
+      const newDuration = newSeconds / 60; // Tekrar dakikaya çevir (1.1666... gibi ondalıklı olabilir)
+      // Hassas yuvarlama: saniye cinsinden tam sayı olarak tut, dakikaya çevirirken hassas yuvarla
+      setDuration(Math.round(newDuration * 10000) / 10000); // 4 ondalık hassasiyetle yuvarla
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else {
@@ -461,7 +1354,14 @@ export default function App() {
 
   const handleDecrease = () => {
     if (!isRunning && !isAlarm) {
-      setDuration(Math.max(0, duration - 0.5)); // 0.5 dakika = 30 saniye, minimum 0
+      // Saniye cinsinden hesapla, sonra dakikaya çevir (yuvarlama hatası önlemek için)
+      // duration'ı saniyeye çevirirken tam sayıya yuvarla (1dk 10sn = 70 saniye)
+      const currentSeconds = Math.round((duration || 0) * 60); // Tam saniye değerini al
+      const newSeconds = Math.max(0, currentSeconds - 10); // 10 saniye çıkar, minimum 0
+      const newDuration = newSeconds / 60; // Tekrar dakikaya çevir (1.1666... gibi ondalıklı olabilir)
+      // Hassas yuvarlama: saniye cinsinden tam sayı olarak tut, dakikaya çevirirken hassas yuvarla
+      // Eğer 0 veya daha azsa, null yap ki "Kalkış zamanını ayarla" göstersin
+      setDuration(newSeconds <= 0 ? null : Math.round(newDuration * 10000) / 10000); // 4 ondalık hassasiyetle yuvarla
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else {
@@ -469,6 +1369,25 @@ export default function App() {
       }
     }
   };
+
+  // Forest app tarzı halkayı çevirme için handler
+  const handleDialRotate = (angle) => {
+    if (!isRunning && !isAlarm) {
+      // Açıyı dakikaya çevir (360 derece = 120 dakika)
+      const newDuration = Math.min(120, Math.max(0, (angle / 360) * 120));
+      // Hareket sırasında smooth, release'de snap-to-grid (10dk)
+      setDuration(newDuration <= 0 ? null : newDuration);
+      // Haptic feedback (sadece 10dk adımlarında)
+      if (newDuration > 0 && newDuration % 10 === 0) {
+        if (Platform.OS === 'ios') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } else {
+          Vibration.vibrate(10);
+        }
+      }
+    }
+  };
+
 
   // Süre değiştiğinde döner düğmeyi animasyonlu olarak döndür
   useEffect(() => {
@@ -494,584 +1413,202 @@ export default function App() {
 
   const healthInfo = getHealthMessage(duration);
   // displayTime: Eğer geri sayım varsa saniyeyi dakikaya çevir, yoksa duration'ı kullan
-  const displayTime = timeLeft !== null && timeLeft !== undefined 
+  const displayTime = (timeLeft !== null && timeLeft !== undefined && !isNaN(timeLeft))
     ? timeLeft / 60  // Saniyeyi dakikaya çevir (0.5, 1.5 gibi ondalıklı olabilir)
-    : (duration !== null && duration !== undefined ? duration : 0);
+    : ((duration !== null && duration !== undefined && !isNaN(duration)) ? duration : 0);
+
+  // Cinsiyet seçim handler'ı
+  const handleGenderSelect = async (selectedGender) => {
+    try {
+      await AsyncStorage.setItem('gender', selectedGender);
+      setGender(selectedGender);
+      setShowGenderSelection(false);
+    } catch (error) {
+      console.error('Cinsiyet kaydedilemedi:', error);
+    }
+  };
 
   // Hangi ekranın gösterileceğini hesapla
+  // Cinsiyet seçimi en yüksek öncelik - ilk açılışta gösterilmeli
+  // Alarm ekranı ikinci öncelik - her zaman en üstte görünmeli
   let content;
 
-  if (showSettings) {
-    // Ayarlar ekranı
+  if (showGenderSelection) {
+    // Cinsiyet seçim ekranı - en yüksek öncelik
     content = (
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
-        bounces={false}
-      >
-        <View style={styles.settingsContainer}>
-          <View style={styles.settingsHeader}>
-            <Text style={styles.settingsTitle}>Ayarlar</Text>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => {
-                setShowSettings(false);
-                saveSettings();
-              }}
-            >
-              <Text style={styles.backButtonText}>✓ Kaydet</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.settingItem}>
-            <Text style={styles.settingLabel}>Erteleme Süresi (dakika)</Text>
-            <View style={styles.settingControls}>
-              <TouchableOpacity
-                style={styles.settingButton}
-                onPress={() => setSnoozeDuration(Math.max(1, snoozeDuration - 5))}
-              >
-                <Text style={styles.settingButtonText}>-5</Text>
-              </TouchableOpacity>
-              <Text style={styles.settingValue}>{snoozeDuration} dk</Text>
-              <TouchableOpacity
-                style={styles.settingButton}
-                onPress={() => setSnoozeDuration(Math.min(30, snoozeDuration + 5))}
-              >
-                <Text style={styles.settingButtonText}>+5</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.settingItem}>
-            <Text style={styles.settingLabel}>Maksimum Erteleme Sayısı</Text>
-            <View style={styles.settingControls}>
-              <TouchableOpacity
-                style={styles.settingButton}
-                onPress={() => setMaxSnoozes(Math.max(1, maxSnoozes - 1))}
-              >
-                <Text style={styles.settingButtonText}>-</Text>
-              </TouchableOpacity>
-              <Text style={styles.settingValue}>{maxSnoozes} kez</Text>
-              <TouchableOpacity
-                style={styles.settingButton}
-                onPress={() => setMaxSnoozes(Math.min(10, maxSnoozes + 1))}
-              >
-                <Text style={styles.settingButtonText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* İzinler listesi */}
-          <View style={styles.settingItem}>
-            <Text style={styles.settingLabel}>İzinler</Text>
-            <View style={styles.permissionRow}>
-              <Text style={styles.permissionName}>Bildirim izni</Text>
-              <View style={styles.permissionRight}>
-                <Text
-                  style={
-                    notificationStatus === 'granted'
-                      ? styles.permissionStatusGranted
-                      : styles.permissionStatusDenied
-                  }
-                >
-                  {notificationStatus === 'granted' ? 'Açık' : 'Kapalı'}
-                </Text>
-                <Switch
-                  value={notificationStatus === 'granted'}
-                  onValueChange={async (value) => {
-                    if (value) {
-                      await requestNotificationPermissionsAgain();
-                    } else {
-                      openSystemSettings();
-                    }
-                  }}
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
+      <GenderSelection onSelect={handleGenderSelect} />
     );
   } else if (isAlarm) {
-    // Alarm ekranı
+    // Alarm ekranı - en yüksek öncelik
     content = (
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
-        bounces={false}
-      >
-        <View style={styles.alarmContainer}>
-          <Text style={styles.alarmIcon}>🔔</Text>
-          <Text style={styles.alarmTitle}>Kalkma Zamanı!</Text>
-          <Text style={styles.alarmSubtitle}>
-            Uzun süredir oturuyorsunuz{'\n'}
-            Kalkıp biraz yürüyün
-          </Text>
+      <AlarmScreen
+        totalSittingDuration={totalSittingDuration}
+        snoozeCount={snoozeCount}
+        maxSnoozes={maxSnoozes}
+        snoozeDuration={snoozeDuration}
+        onSnooze={handleSnooze}
+        onStandUp={handleStandUp}
+        stopAlarmSound={stopAlarmSound}
+        intervalRef={intervalRef}
+      />
+    );
+  } else if (showSettings) {
+    // Ayarlar ekranı
+    content = (
+      <SettingsScreen
+        snoozeDuration={snoozeDuration}
+        maxSnoozes={maxSnoozes}
+        notificationStatus={notificationStatus}
+        enableVibration={enableVibration}
+        enableSound={enableSound}
+        alarmSound={alarmSound}
+        availableAlarmSounds={availableAlarmSounds}
+        onBack={async () => {
+          // Ayarlardan çıkarken çalan test sesini durdur
+          await stopAlarmSound();
+          setShowMenu(false);
+          setShowSettings(false);
+          // Kaydet butonuna basılmadığı için kaydetme
+        }}
+        onSave={async (settings) => {
+          // Ayarlardan çıkarken çalan test sesini durdur
+          await stopAlarmSound();
           
-          <View style={styles.alarmControls}>
-            {snoozeCount < maxSnoozes && (
-              <TouchableOpacity
-                style={styles.snoozeButton}
-                onPress={handleSnooze}
-              >
-                <Text style={styles.snoozeButtonText}>
-                  {`Ertele (${snoozeDuration}dk)`}
-                </Text>
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity style={styles.standUpButton} onPress={handleStandUp}>
-              <Text style={styles.standUpButtonText}>Kalktım ✓</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+          // ÖNCE AsyncStorage'a kaydet (alarm her zaman buradan okuyacak)
+          try {
+            await AsyncStorage.setItem('snoozeDuration', settings.snoozeDuration.toString());
+            await AsyncStorage.setItem('maxSnoozes', settings.maxSnoozes.toString());
+            await AsyncStorage.setItem('enableVibration', settings.enableVibration.toString());
+            await AsyncStorage.setItem('enableSound', settings.enableSound.toString());
+            await AsyncStorage.setItem('alarmSound', settings.alarmSound);
+            console.log('✅ Ayarlar AsyncStorage\'a kaydedildi:', settings.alarmSound);
+          } catch (error) {
+            console.error('Ayarlar kaydedilemedi:', error);
+          }
+          
+          // SONRA REF'leri güncelle
+          alarmSoundRef.current = settings.alarmSound;
+          enableVibrationRef.current = settings.enableVibration;
+          enableSoundRef.current = settings.enableSound;
+          
+          // SONRA state'i güncelle
+          setSnoozeDuration(settings.snoozeDuration);
+          setMaxSnoozes(settings.maxSnoozes);
+          setEnableVibration(settings.enableVibration);
+          setEnableSound(settings.enableSound);
+          setAlarmSound(settings.alarmSound);
+          
+          setShowMenu(false);
+          setShowSettings(false);
+        }}
+        onNotificationToggle={async (value) => {
+          if (value) {
+            await requestNotificationPermissionsAgain();
+          } else {
+            openSystemSettings();
+          }
+        }}
+        onTestSound={playTestSound}
+        onClearData={clearAllData}
+      />
+    );
+  } else if (showStatistics) {
+    // İstatistik ekranı
+    content = (
+      <StatisticsScreen
+        onBack={() => {
+          setShowMenu(false);
+          setShowStatistics(false);
+          setStatisticsView('today'); // İstatistikler sayfasından çıkıldığında her zaman 'Bugün' sekmesine sıfırla
+        }}
+        refreshKey={statisticsRefreshKey}
+        statisticsView={statisticsView}
+        setStatisticsView={setStatisticsView}
+      />
+    );
+  } else if (showProfile) {
+    // Profil ekranı
+    content = (
+      <ProfileScreen
+        gender={gender}
+        onBack={() => {
+          setShowMenu(false);
+          setShowProfile(false);
+        }}
+        onGenderChange={async (newGender) => {
+          try {
+            await AsyncStorage.setItem('gender', newGender);
+            setGender(newGender);
+          } catch (error) {
+            console.error('Cinsiyet güncellenemedi:', error);
+          }
+        }}
+      />
     );
   } else {
     // Ana ekran
     content = (
       <>
-        {/* Sabit header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Kalk Hatırlatıcı</Text>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => setShowSettings(true)}
-          >
-            <Text style={styles.settingsButtonText}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Scroll edilebilen içerik */}
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          contentInsetAdjustmentBehavior="automatic"
-          bounces={false}
-        >
-        {/* Çalar Saat İkonu ile Döner Düğme */}
-        <View style={styles.dialContainer}>
-          <Animated.View style={[styles.dial, animatedStyle]}>
-            <View style={styles.dialInner}>
-              <Text style={styles.clockIcon}>⏰</Text>
-            </View>
-          </Animated.View>
-            
-            {/* +/- Butonları (Test için 30 saniye) */}
-            <View style={styles.dialControls}>
-              <TouchableOpacity
-                style={styles.rotateButton}
-                onPress={handleDecrease}
-                disabled={isRunning}
-              >
-                <Text style={styles.rotateButtonText}>-30sn</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.rotateButton}
-                onPress={handleIncrease}
-                disabled={isRunning}
-              >
-                <Text style={styles.rotateButtonText}>+30sn</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Süre Gösterimi */}
-          <View style={styles.timeContainer}>
-            {!isRunning ? (
-              duration <= 0 ? (
-                <Text style={styles.timeText}>Kalkış zamanını ayarla</Text>
-              ) : (
-                <Text style={styles.timeText}>
-                  {formatTime(displayTime) || '0 sn sonra kalk'}
-                </Text>
-              )
-            ) : (
-              <>
-                <Text style={styles.timeText}>
-                  {formatTime(initialDuration || duration)} ✓
-                </Text>
-                <Text style={styles.countdownText}>
-                  {formatCountdown(timeLeft)}
-                </Text>
-              </>
-            )}
-          </View>
-
-          {/* Sağlık Bilgisi */}
-          {duration > 0 && healthInfo && healthInfo.message && (
-            <View style={[styles.healthContainer, { backgroundColor: (healthInfo.color || '#999') + '20' }]}>
-              <Text style={[styles.healthText, { color: healthInfo.color || '#999' }]}>
-                {String(healthInfo.message)}
-              </Text>
-            </View>
-          )}
-
-          {/* Kontrol Butonları */}
-          <View style={styles.controls}>
-            {!isRunning ? (
-              duration > 0 ? (
-                <TouchableOpacity style={styles.startButton} onPress={startTimer}>
-                  <Text style={styles.startButtonText}>Başlat</Text>
-                </TouchableOpacity>
-              ) : null
-            ) : (
-              <TouchableOpacity style={styles.stopButton} onPress={stopTimer}>
-                <Text style={styles.stopButtonText}>Durdur</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </ScrollView>
+        <Header onMenuPress={() => setShowMenu(true)} />
+        <Menu
+          visible={showMenu}
+          onClose={() => setShowMenu(false)}
+          onStatisticsPress={() => {
+            setShowStatistics(true);
+            setShowMenu(false);
+          }}
+          onProfilePress={() => {
+            setShowProfile(true);
+            setShowMenu(false);
+          }}
+          onSettingsPress={() => {
+            setShowSettings(true);
+            setShowMenu(false);
+          }}
+        />
+        <TimerScreen
+          duration={duration}
+          timeLeft={timeLeft}
+          isRunning={isRunning}
+          isAlarm={isAlarm}
+          initialDuration={initialDuration}
+          displayTime={displayTime}
+          animatedStyle={animatedStyle}
+          healthInfo={healthInfo}
+          gender={gender}
+          onIncrease={handleIncrease}
+          onDecrease={handleDecrease}
+          onDialRotate={handleDialRotate}
+          onStart={startTimer}
+          onStop={stopTimer}
+        />
       </>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={isAlarm ? "light-content" : "dark-content"} hidden={isAlarm} />
-      {content}
-    </SafeAreaView>
+    <View style={styles.wrapper}>
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="#2196F3"
+        translucent={false}
+        hidden={isAlarm} 
+      />
+      <View style={styles.contentWrapper}>
+        {content}
+      </View>
+      <CustomAlert />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    // Üst alanın tüm ekranlarda stabil kalması için sabit bir boşluk
-    paddingTop: Platform.OS === 'ios' ? 8 : 16,
+    backgroundColor: '#2196F3', // iOS'ta üst kısımda beyazlık kalmaması için mavi
   },
-  scrollView: {
+  contentWrapper: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: Platform.OS === 'android' ? 150 : 80, // Gömülü kontrol düğmeleri için daha fazla padding
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 8,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  settingsButton: {
-    padding: 10,
-  },
-  settingsButtonText: {
-    fontSize: 24,
-  },
-  dialContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 40,
-  },
-  dialControls: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 20,
-  },
-  rotateButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  rotateButtonText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '600',
-  },
-  dial: {
-    width: Math.min(width * 0.65, 220),
-    height: Math.min(width * 0.65, 220),
-    borderRadius: Math.min(width * 0.325, 110),
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    // 3D görünüm için çoklu shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 15,
-    // İç gölge efekti için border
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  dialInner: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  clockIcon: {
-    fontSize: 96,
-  },
-  dialIndicator: {
-    position: 'absolute',
-    top: 15,
-    width: 5,
-    height: 25,
-    backgroundColor: '#FF5722',
-    borderRadius: 3,
-    shadowColor: '#FF5722',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  dialArrows: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '80%',
-    position: 'absolute',
-  },
-  arrowLeft: {
-    fontSize: 32,
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  arrowRight: {
-    fontSize: 32,
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  timeContainer: {
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  timeText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  countdownText: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#FF5722',
-  },
-  healthContainer: {
-    marginHorizontal: 20,
-    padding: 15,
-    borderRadius: 12,
-    marginVertical: 20,
-  },
-  healthText: {
-    fontSize: 16,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  controls: {
-    paddingHorizontal: 20,
-    marginTop: 30,
-  },
-  startButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 18,
-    borderRadius: 25,
-    alignItems: 'center',
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  stopButton: {
-    backgroundColor: '#FF5722',
-    paddingVertical: 18,
-    borderRadius: 25,
-    alignItems: 'center',
-    shadowColor: '#FF5722',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  stopButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  alarmContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
-    minHeight: height,
-  },
-  alarmIcon: {
-    fontSize: 80,
-    marginBottom: 20,
-  },
-  alarmTitle: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#FF5722',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  alarmSubtitle: {
-    fontSize: 18,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-  alarmControls: {
-    width: '100%',
-    gap: 15,
-  },
-  snoozeButton: {
-    backgroundColor: '#FFC107',
-    paddingVertical: 18,
-    borderRadius: 25,
-    alignItems: 'center',
-    shadowColor: '#FFC107',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  snoozeButtonDisabled: {
-    backgroundColor: '#ccc',
-    shadowColor: '#ccc',
-  },
-  snoozeButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  standUpButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 18,
-    borderRadius: 25,
-    alignItems: 'center',
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  standUpButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  settingsContainer: {
-    flex: 1,
-    padding: 20,
-    paddingTop: 40,
-  },
-  settingsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  settingsTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  backButton: {
-    padding: 10,
-    backgroundColor: '#4CAF50',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  settingItem: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
-  },
-  settingControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  settingButton: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  settingButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  settingValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  permissionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  permissionName: {
-    fontSize: 16,
-    color: '#333',
-  },
-  permissionStatusGranted: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  permissionStatusDenied: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#F44336',
-  },
-  permissionRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    backgroundColor: '#f5f5f5', // İçerik arka planı açık gri
   },
 });
-

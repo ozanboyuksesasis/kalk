@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-      "splash": {
+    "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -14,7 +14,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kalk.app"
+      "bundleIdentifier": "com.kalk.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification",
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,13 +35,16 @@
         "USE_EXACT_ALARM"
       ]
     },
-    "web": {
-    },
+    "web": {},
     "plugins": [
       [
         "expo-notifications"
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "18f75bf2-d17d-487d-ba9d-f644ae0566c0"
+      }
+    }
   }
 }
-

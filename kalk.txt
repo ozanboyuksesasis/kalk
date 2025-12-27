@@ -11,3 +11,6 @@ Sonra kalk zamanı geldiğinde erteleme imkanı da sağlayalım alarma erteler g
 Bİ dene bakalım ne cıkıcak ortaya.
 
 Ama bunu yaparken tabi hem ios hem android cihazlarda her ekran size ına, her telefon sürümüne uygun bir uygulama yapmanı istiyorum. Ve benim su an windows bilgisayarda oldugumu calıstırmak iççin neler yapmam gerektiğini de uygulama hazır olduktan sonra bana yazmanı isitoyrum adım adım.
+
+----
+öncelikle şunu anlamanı istiyorum bildirim olayından vazgeçtim hangi bildirim şu yukarıdan gelen kalkın yürüyün var ya o. neden vaçgeçtim çünkü artık şu mantıgı izlemek istiyorum kullanıcı telefonu kilitli iken normal alarm uygulamaları gibi tüm ekranı kapsayacak bir ekranla buna bizim işte süre dolduktan sonra cıkardıgımız ekran uygun bir ekranla kalktım veya ertele demesi. 2. case kullanıcı ekranı kilitli değil ve benim uygulamam kapalı baska işler yapıyor bu durumda üstten bildirim atılıp o bildirim içerisine kalktım ve ertele butonu koyulabilir. 3. case kullanıcı benim uygulamam için de bu durumda zaten sadece sonuç ekranını görmeli bildirim felan yok
