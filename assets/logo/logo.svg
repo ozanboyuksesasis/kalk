@@ -1,0 +1,46 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Arka plan -->
+  <rect width="1024" height="1024" rx="220" fill="#2196F3"/>
+
+  <!-- Dış zaman halkası -->
+  <circle
+          cx="512"
+          cy="512"
+          r="300"
+          fill="none"
+          stroke="rgba(255,255,255,0.18)"
+          stroke-width="22"
+  />
+
+  <!-- Progress hissi veren yarım halka -->
+  <circle
+          cx="512"
+          cy="512"
+          r="300"
+          fill="none"
+          stroke="rgba(255,255,255,0.45)"
+          stroke-width="22"
+          stroke-dasharray="470 1880"
+          stroke-linecap="butt"
+          transform="rotate(-90 512 512)"
+  />
+
+  <!-- Merkez spiral / yükseliş -->
+  <g transform="translate(512 640)">
+    <path
+            d="M 0 0
+         C -80 -40, -80 -140, 0 -200
+         C 80 -260, 80 -360, 0 -420"
+            fill="none"
+            stroke="rgba(255,255,255,0.95)"
+            stroke-width="36"
+            stroke-linecap="round"
+    />
+
+    <!-- Başlangıç noktası (oturma) -->
+    <circle cx="0" cy="0" r="22" fill="rgba(255,255,255,0.5)"/>
+
+    <!-- Varış noktası (ayakta / hareket) -->
+    <circle cx="0" cy="-420" r="30" fill="rgba(255,255,255,1)"/>
+  </g>
+</svg>

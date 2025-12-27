@@ -5,9 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/logo/icon.png",
     "splash": {
+      "image": "./assets/logo/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2196F3"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -15,6 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kalk.app",
+      "icon": "./assets/logo/icon.png",
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification",
@@ -25,8 +28,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/logo/adaptive-icon.png",
+        "backgroundColor": "#2196F3"
       },
+      "icon": "./assets/logo/icon.png",
       "package": "com.kalk.app",
       "permissions": [
         "VIBRATE",
