@@ -190,7 +190,7 @@ export default function OvalTimerDial({
           {angle > 0 && (
               <Path
                   d={progressPath(center, center, PROGRESS_RADIUS, angle)}
-                  stroke="#2E7D32"
+                  stroke="#2196F3"
                   strokeWidth={PROGRESS_STROKE}
                   fill="none"
                   strokeLinecap="butt"
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2E7D32',
+    backgroundColor: '#2196F3',
     borderWidth: 4,
     borderColor: '#fff',
     elevation: 6,
