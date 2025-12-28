@@ -5,7 +5,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 const MAX_MINUTES = 120;
 const DEG_PER_MIN = 360 / MAX_MINUTES;
-const SNAP_MIN = 10;
+const SNAP_MIN = 5; // 10 dakikadan 5 dakikaya düşürüldü (daha hassas)
 const SNAP_DEG = SNAP_MIN * DEG_PER_MIN;
 
 export default function OvalTimerDial({
@@ -290,12 +290,12 @@ export default function OvalTimerDial({
         onPanResponderRelease: () => {
           setDragging(false);
           
-          // Snap to grid (10 dakika)
-          const snap = Math.round(angleRef.current / SNAP_DEG) * SNAP_DEG;
-          const clampedSnap = Math.max(0, Math.min(snap, 359.99));
-          angleRef.current = clampedSnap;
-          setAngle(clampedSnap);
-          onChange?.(Math.round(clampedSnap / DEG_PER_MIN));
+          // Snap yok - hangi açıdaysa o açıda kal (hassas ayar)
+          // Sadece clamp et (0-359.99 arasında)
+          const finalAngle = Math.max(0, Math.min(angleRef.current, 359.99));
+          angleRef.current = finalAngle;
+          setAngle(finalAngle);
+          onChange?.(Math.round(finalAngle / DEG_PER_MIN));
           
           // Scroll'u tekrar aç
           if (scrollViewRef && scrollViewRef.current) {

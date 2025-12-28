@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Platform, Dimensions } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Platform, Dimensions, TextInput } from 'react-native';
 import { formatTime, formatCountdown } from '../utils/formatTime';
 import { getHealthMessage } from '../utils/healthMessages';
 import OvalTimerDial from './OvalTimerDial';
@@ -27,6 +27,9 @@ const TimerScreen = ({
 }) => {
   const scrollViewRef = useRef(null);
   
+  // Manuel ayar için state (tamamen bağımsız)
+  const [minutesInput, setMinutesInput] = useState('');
+  
   // OvalTimerDial onChange handler - dakika cinsinden değeri açıya çevir
   const handleDialChange = (minutes) => {
     // Timer çalışıyorsa veya alarm açıksa halkayı pasif yap
@@ -37,6 +40,27 @@ const TimerScreen = ({
       // Dakikayı açıya çevir (120 dakika = 360 derece)
       const angle = (minutes / 120) * 360;
       onDialRotate(angle);
+    }
+  };
+  
+  // Manuel ayar handler (tamamen bağımsız - sadece onBlur'da çalışır)
+  const handleManualChange = () => {
+    if (isRunning || isAlarm) return;
+    
+    const minutes = parseInt(minutesInput) || 0;
+    
+    // Max 120 dakika kontrolü
+    const finalMinutes = Math.min(minutes, 120);
+    if (finalMinutes !== minutes) {
+      setMinutesInput(finalMinutes.toString());
+    }
+    
+    if (finalMinutes > 0 && onDialRotate) {
+      const angle = (finalMinutes / 120) * 360;
+      onDialRotate(angle);
+    } else if (finalMinutes === 0 && onDialRotate) {
+      // 0 dakika ise sıfırla
+      onDialRotate(0);
     }
   };
   return (
@@ -74,18 +98,44 @@ const TimerScreen = ({
           <TouchableOpacity
             style={styles.rotateButton}
             onPress={onDecrease}
-            disabled={isRunning}
+            disabled={isRunning || isAlarm}
           >
             <Text style={styles.rotateButtonText}>-10sn</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.rotateButton}
             onPress={onIncrease}
-            disabled={isRunning}
+            disabled={isRunning || isAlarm}
           >
             <Text style={styles.rotateButtonText}>+10sn</Text>
           </TouchableOpacity>
         </View>
+        
+        {/* Manuel Ayar Alanı (Tamamen Bağımsız) */}
+        {!isRunning && !isAlarm && (
+          <View style={styles.manualInputContainer}>
+            <Text style={styles.manualInputLabel}>Manuel Ayar</Text>
+            <View style={styles.manualInputRow}>
+              <TextInput
+                style={styles.manualInput}
+                placeholder="0"
+                placeholderTextColor="#999"
+                value={minutesInput}
+                onChangeText={(text) => {
+                  // Sadece sayı kabul et
+                  const numericValue = text.replace(/[^0-9]/g, '');
+                  setMinutesInput(numericValue);
+                }}
+                onBlur={handleManualChange}
+                keyboardType="number-pad"
+                maxLength={3}
+                editable={!isRunning && !isAlarm}
+              />
+              <Text style={styles.inputLabel}>Dakika</Text>
+            </View>
+            <Text style={styles.manualInputHint}>Maksimum: 120 dakika (2 saat)</Text>
+          </View>
+        )}
       </View>
 
       {/* Süre Gösterimi */}
@@ -225,6 +275,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+  },
+  manualInputContainer: {
+    marginTop: 30,
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  manualInputLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+  },
+  manualInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  manualInput: {
+    width: 100,
+    height: 60,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+    borderRadius: 12,
+    textAlign: 'center',
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333',
+    backgroundColor: '#fff',
+  },
+  inputLabel: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '500',
+  },
+  manualInputHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 10,
+    fontStyle: 'italic',
   },
   timeContainer: {
     alignItems: 'center',
