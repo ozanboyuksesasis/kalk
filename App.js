@@ -89,6 +89,7 @@ export default function App() {
   const [snoozeDuration, setSnoozeDuration] = useState(5); // erteleme süresi (dakika)
   const [maxSnoozes, setMaxSnoozes] = useState(3); // maksimum erteleme sayısı
   const [snoozeCount, setSnoozeCount] = useState(0);
+  const alarmTimeoutRef = useRef(null); // Alarm tetikleme timeout'larını takip et
   const [showSettings, setShowSettings] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState(null);
   const [firstSittingDuration, setFirstSittingDuration] = useState(null); // İlk oturma süresi (dakika)
@@ -183,10 +184,15 @@ export default function App() {
           if (shouldTriggerAlarmIfExpired) {
             console.log('🚨 Süre dolmuş, alarm tetikleniyor...');
             // BASİT: Direkt triggerAlarm çağır
-            setTimeout(async () => {
+            // Önceki timeout'u iptal et
+            if (alarmTimeoutRef.current) {
+              clearTimeout(alarmTimeoutRef.current);
+            }
+            alarmTimeoutRef.current = setTimeout(async () => {
               if (!isAlarmRef.current) {
                 await triggerAlarm();
               }
+              alarmTimeoutRef.current = null;
             }, 300);
           } else {
             // Timer durumunu sıfırla
@@ -214,10 +220,15 @@ export default function App() {
       // Hata olursa bile shouldTriggerAlarmIfExpired true ise alarm tetikle
       if (shouldTriggerAlarmIfExpired) {
         console.log('🚨 Hata sonrası alarm tetikleniyor...');
-        setTimeout(async () => {
+        // Önceki timeout'u iptal et
+        if (alarmTimeoutRef.current) {
+          clearTimeout(alarmTimeoutRef.current);
+        }
+        alarmTimeoutRef.current = setTimeout(async () => {
           if (!isAlarmRef.current) {
             await triggerAlarm();
           }
+          alarmTimeoutRef.current = null;
         }, 500);
       }
     }
@@ -678,6 +689,11 @@ export default function App() {
           
           // triggerAlarm fonksiyonunu çağır (ses ve titreşim için)
           if (!isAlarmRef.current) {
+            // Önceki timeout'u iptal et
+            if (alarmTimeoutRef.current) {
+              clearTimeout(alarmTimeoutRef.current);
+              alarmTimeoutRef.current = null;
+            }
             triggerAlarm();
           }
         }
@@ -713,10 +729,15 @@ export default function App() {
         }
         
         // Kısa bir gecikme ile triggerAlarm çağır (uygulama açılmasını bekle)
-        setTimeout(async () => {
+        // Önceki timeout'u iptal et
+        if (alarmTimeoutRef.current) {
+          clearTimeout(alarmTimeoutRef.current);
+        }
+        alarmTimeoutRef.current = setTimeout(async () => {
           if (!isAlarmRef.current) {
             await triggerAlarm();
           }
+          alarmTimeoutRef.current = null;
         }, 300);
       }
     });
@@ -1226,6 +1247,13 @@ export default function App() {
     isAlarmRef.current = false;
     setIsAlarm(false);
     setIsRunning(false);
+    
+    // HEMEN: Pending alarm timeout'larını iptal et (tekrar açılmayı önle)
+    if (alarmTimeoutRef.current) {
+      clearTimeout(alarmTimeoutRef.current);
+      alarmTimeoutRef.current = null;
+      console.log('⏹️ Pending alarm timeout iptal edildi');
+    }
     
     // HEMEN: Titreşimi durdur
     if (Platform.OS === 'android') {
