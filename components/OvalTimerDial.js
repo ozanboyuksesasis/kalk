@@ -32,8 +32,7 @@ export default function OvalTimerDial({
   const [angle, setAngle] = useState(0);
   const angleRef = useRef(0);
   const [dragging, setDragging] = useState(false);
-  const lastTouchRef = useRef({ x: 0, y: 0 });
-  const lastVibrationAngleRef = useRef(-1); // Son titreşim verilen açı (tekrar titreşim vermemek için)
+  const lastVibrationAngleRef = useRef(-1); // Son titreşim verilen açı
 
   /* ---------- POLAR HELPERS ---------- */
   const polar = (cx, cy, r, a) => {
@@ -75,16 +74,6 @@ export default function OvalTimerDial({
       setAngle(a);
     }
   }, [duration, dragging]);
-  
-  // Cleanup: Component unmount olduğunda animation frame'i iptal et
-  useEffect(() => {
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-    };
-  }, []);
 
   /* ---------- TOUCH ---------- */
   const angleFromTouch = (x, y) => {
@@ -92,22 +81,41 @@ export default function OvalTimerDial({
     const dy = y - center;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Merkeze çok yakınsa önceki angle'i koru (hassasiyet için)
-    if (distance < PROGRESS_RADIUS * 0.3) {
+    // Merkeze çok yakınsa önceki angle'i koru
+    const minDistance = PROGRESS_RADIUS * 0.05;
+    if (distance < minDistance) {
       return angleRef.current;
     }
     
+    // Math.atan2 ile açı hesapla (0° = üstte, saat yönünde artar)
     let deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-    return deg < 0 ? deg + 360 : deg;
+    
+    // 0-360 arasına normalize et
+    if (deg < 0) deg += 360;
+    if (deg >= 360) deg -= 360;
+    
+    return deg;
+  };
+  
+  // Touch pozisyonunun halka alanında olup olmadığını kontrol et
+  const isTouchInDialArea = (x, y) => {
+    const dx = x - center;
+    const dy = y - center;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    const handleRadius = 14;
+    const tolerance = 30;
+    const minRadius = Math.max(0, PROGRESS_RADIUS - handleRadius - tolerance);
+    const maxRadius = PROGRESS_RADIUS + handleRadius + tolerance;
+    
+    return distance >= minRadius && distance <= maxRadius;
   };
 
-  // Angle delta hesapla (önceki touch'tan değişim) - 360° wrap desteği
+  // Basit delta hesaplama - 360° wrap desteği
   const getAngleDelta = (currentAngle, lastAngle) => {
     let delta = currentAngle - lastAngle;
     
     // 360° geçişlerini düzelt (kısa yolu seç)
-    // Örn: 350° -> 10° = +20° (360° üzerinden değil, direkt +20°)
-    // Örn: 10° -> 350° = -20° (360° üzerinden değil, direkt -20°)
     if (delta > 180) {
       delta -= 360;
     } else if (delta < -180) {
@@ -116,70 +124,84 @@ export default function OvalTimerDial({
     
     return delta;
   };
-  
-  // Angle'ı 0-360 arasında wrap et (360°'den sonra 0'a devam, 0'dan önce 360°'ye)
-  const wrapAngle = (a) => {
-    a = a % 360;
-    if (a < 0) a += 360;
-    return a;
-  };
-
-  // iOS için smooth update mekanizması - daha agresif optimizasyon
-  const animationFrameRef = useRef(null);
-  const pendingAngleRef = useRef(null);
-  
-  // iOS'ta sürekli update için recursive fonksiyon
-  const scheduleUpdate = () => {
-    if (pendingAngleRef.current !== null) {
-      const angle = pendingAngleRef.current;
-      angleRef.current = angle;
-      setAngle(angle);
-      onChange?.(Math.round(angle / DEG_PER_MIN));
-      pendingAngleRef.current = null;
-    }
-    animationFrameRef.current = null;
-    
-    // Eğer hala pending angle varsa tekrar schedule et
-    if (pendingAngleRef.current !== null) {
-      animationFrameRef.current = requestAnimationFrame(scheduleUpdate);
-    }
-  };
-  
-  // iOS'ta smooth update fonksiyonu (requestAnimationFrame ile)
-  const updateAngleSmooth = (newAngle) => {
-    if (Platform.OS === 'ios') {
-      // En son angle'i kaydet (her touch event'inde güncellenir)
-      pendingAngleRef.current = newAngle;
-      
-      // requestAnimationFrame ile smooth update (sadece bir kez schedule et)
-      if (animationFrameRef.current === null) {
-        animationFrameRef.current = requestAnimationFrame(scheduleUpdate);
-      }
-    } else {
-      // Android'de direkt update (mevcut davranış - değişmedi)
-      angleRef.current = newAngle;
-      setAngle(newAngle);
-      onChange?.(Math.round(newAngle / DEG_PER_MIN));
-    }
-  };
 
   const panResponder = useRef(
       PanResponder.create({
         onStartShouldSetPanResponder: (evt) => {
           if (isRunning || isAlarm) return false;
-          // Halka alanına dokunulduğunda scroll'u hemen kapat
-          scrollViewRef?.setNativeProps({ scrollEnabled: false });
-          return true;
+          
+          const { locationX, locationY } = evt.nativeEvent;
+          
+          // iOS'ta daha agresif: Touch alanı kontrolü yap ama daha esnek ol
+          if (Platform.OS === 'ios') {
+            // iOS'ta halka alanı kontrolünü biraz gevşet
+            if (isTouchInDialArea(locationX, locationY)) {
+              // Scroll'u kapat
+              if (scrollViewRef && scrollViewRef.current) {
+                try {
+                  scrollViewRef.current.setNativeProps({ scrollEnabled: false });
+                } catch (e) {
+                  // Hata olursa devam et
+                }
+              }
+              return true;
+            }
+            // iOS'ta: Eğer halka alanına yakınsa da true döndür (daha esnek)
+            const dx = locationX - center;
+            const dy = locationY - center;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const extendedRadius = PROGRESS_RADIUS + 50; // Daha geniş algılama alanı
+            if (distance <= extendedRadius) {
+              if (scrollViewRef && scrollViewRef.current) {
+                try {
+                  scrollViewRef.current.setNativeProps({ scrollEnabled: false });
+                } catch (e) {
+                  // Hata olursa devam et
+                }
+              }
+              return true;
+            }
+            return false;
+          } else {
+            // Android'de normal kontrol
+            if (isTouchInDialArea(locationX, locationY)) {
+              if (scrollViewRef && scrollViewRef.current) {
+                try {
+                  scrollViewRef.current.setNativeProps({ scrollEnabled: false });
+                } catch (e) {
+                  // Hata olursa devam et
+                }
+              }
+              return true;
+            }
+            return false;
+          }
         },
         
-        // iOS için kritik: move event'lerini daha iyi yakalamak için
+        // iOS için: move event'lerini yakalamak için - daha agresif
         onMoveShouldSetPanResponder: (evt, gestureState) => {
           if (isRunning || isAlarm) return false;
-          // iOS'ta daha hassas başlangıç için küçük hareket eşiği
+          
           if (Platform.OS === 'ios') {
-            return Math.abs(gestureState.dx) > 1 || Math.abs(gestureState.dy) > 1;
+            const { locationX, locationY } = evt.nativeEvent;
+            
+            // Halka alanı kontrolü
+            if (isTouchInDialArea(locationX, locationY)) {
+              // Çok küçük hareket eşiği - hemen yakala
+              return Math.abs(gestureState.dx) > 0.1 || Math.abs(gestureState.dy) > 0.1;
+            }
+            
+            // Genişletilmiş alan kontrolü
+            const dx = locationX - center;
+            const dy = locationY - center;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const extendedRadius = PROGRESS_RADIUS + 50;
+            if (distance <= extendedRadius) {
+              // Küçük hareket eşiği
+              return Math.abs(gestureState.dx) > 0.1 || Math.abs(gestureState.dy) > 0.1;
+            }
           }
-          return false; // Android'de sadece onStartShouldSetPanResponder yeterli
+          return false;
         },
         
         // iOS için: PanResponder'ın daha iyi çalışması için
@@ -188,92 +210,124 @@ export default function OvalTimerDial({
 
         onPanResponderGrant: (e) => {
           setDragging(true);
-          scrollViewRef?.setNativeProps({ scrollEnabled: false });
-          const { locationX, locationY } = e.nativeEvent;
-          lastTouchRef.current = { x: locationX, y: locationY };
-          pendingAngleRef.current = null;
-          lastVibrationAngleRef.current = -1; // Yeni dokunma başladığında titreşim flag'ini sıfırla
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
+          
+          // Scroll'u kapat
+          if (scrollViewRef && scrollViewRef.current) {
+            try {
+              scrollViewRef.current.setNativeProps({ scrollEnabled: false });
+            } catch (e) {
+              // Hata olursa devam et
+            }
           }
+          
+          lastVibrationAngleRef.current = -1; // Yeni dokunma başladığında titreşim flag'ini sıfırla
         },
 
         onPanResponderMove: e => {
           const { locationX, locationY } = e.nativeEvent;
+          
+          // iOS'ta daha esnek alan kontrolü
+          let shouldProcess = false;
+          if (Platform.OS === 'ios') {
+            // iOS'ta hem normal hem genişletilmiş alan kontrolü
+            if (isTouchInDialArea(locationX, locationY)) {
+              shouldProcess = true;
+            } else {
+              // Genişletilmiş alan kontrolü (daha esnek)
+              const dx = locationX - center;
+              const dy = locationY - center;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              const extendedRadius = PROGRESS_RADIUS + 50;
+              if (distance <= extendedRadius) {
+                shouldProcess = true;
+              }
+            }
+          } else {
+            // Android'de normal kontrol
+            shouldProcess = isTouchInDialArea(locationX, locationY);
+          }
+          
+          if (!shouldProcess) {
+            return;
+          }
+          
           const currentAngle = angleFromTouch(locationX, locationY);
           const lastAngle = angleRef.current;
           
-          // Delta hesapla (büyük sıçramaları önle)
-          const delta = getAngleDelta(currentAngle, lastAngle);
+          // Delta hesapla
+          let delta = getAngleDelta(currentAngle, lastAngle);
           
-          // Çok büyük delta'ları filtrele (hassasiyet için)
-          const maxDelta = Platform.OS === 'ios' ? 45 : 90;
+          // Çok büyük delta'ları filtrele (sıçramaları önle)
+          const maxDelta = 90;
           if (Math.abs(delta) > maxDelta) {
             return; // Bu bir sıçrama, görmezden gel
           }
           
-          // Delta'yı uygula ve clamp et (0-359.99 arasında kal, wrap yok)
+          // Delta'yı uygula ve clamp et (0-359.99 arasında kal)
           let newAngle = lastAngle + delta;
           const wasAtMax = lastAngle >= 359.99;
           newAngle = Math.max(0, Math.min(newAngle, 359.99)); // 360°'de dur, 0'a geçme
           
           // 360°'ye ulaştığında ve ileri gitmeye çalıştığında titreşim ver
-          // (Sadece 360°'ye ulaştığında bir kez, tekrar tekrar değil)
           if (newAngle >= 359.99 && !wasAtMax && lastVibrationAngleRef.current < 359.99) {
-            // 360°'ye ulaştı, titreşim ver
             if (Platform.OS === 'ios') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             } else {
               Vibration.vibrate(50);
             }
             lastVibrationAngleRef.current = 359.99;
+          } else if (newAngle < 359.99) {
+            // 360°'den uzaklaştığında titreşim flag'ini sıfırla
+            lastVibrationAngleRef.current = -1;
           }
           
-          // iOS'ta smooth update, Android'de direkt update
-          if (Platform.OS === 'ios') {
-            updateAngleSmooth(newAngle);
-          } else {
-            angleRef.current = newAngle;
-            setAngle(newAngle);
-            onChange?.(Math.round(newAngle / DEG_PER_MIN));
-          }
-          
-          lastTouchRef.current = { x: locationX, y: locationY };
+          // Her iki platformda da direkt update (basit ve çalışan)
+          angleRef.current = newAngle;
+          setAngle(newAngle);
+          onChange?.(Math.round(newAngle / DEG_PER_MIN));
         },
 
         onPanResponderRelease: () => {
           setDragging(false);
-          scrollViewRef?.setNativeProps({ scrollEnabled: true });
           
-          // iOS'ta pending update'i tamamla
-          if (Platform.OS === 'ios' && pendingAngleRef.current !== null) {
-            const angle = pendingAngleRef.current;
-            angleRef.current = angle;
-            setAngle(angle);
-            pendingAngleRef.current = null;
-          }
-          
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-          }
-
+          // Snap to grid (10 dakika)
           const snap = Math.round(angleRef.current / SNAP_DEG) * SNAP_DEG;
-          const clampedSnap = Math.max(0, Math.min(snap, 359.99)); // 360°'de dur, 0'a geçme
+          const clampedSnap = Math.max(0, Math.min(snap, 359.99));
           angleRef.current = clampedSnap;
           setAngle(clampedSnap);
           onChange?.(Math.round(clampedSnap / DEG_PER_MIN));
+          
+          // Scroll'u tekrar aç
+          if (scrollViewRef && scrollViewRef.current) {
+            if (Platform.OS === 'ios') {
+              // iOS'ta kısa bir delay ile (state reset için)
+              setTimeout(() => {
+                try {
+                  scrollViewRef.current?.setNativeProps({ scrollEnabled: true });
+                } catch (e) {
+                  // Hata olursa devam et
+                }
+              }, 50);
+            } else {
+              try {
+                scrollViewRef.current.setNativeProps({ scrollEnabled: true });
+              } catch (e) {
+                // Hata olursa devam et
+              }
+            }
+          }
         },
         
         onPanResponderTerminate: () => {
-          // iOS'ta gesture iptal edildiğinde (örn: scroll başladığında)
           setDragging(false);
-          scrollViewRef?.setNativeProps({ scrollEnabled: true });
-          pendingAngleRef.current = null;
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
+          
+          // Scroll'u tekrar aç
+          if (scrollViewRef && scrollViewRef.current) {
+            try {
+              scrollViewRef.current.setNativeProps({ scrollEnabled: true });
+            } catch (e) {
+              // Hata olursa devam et
+            }
           }
         },
       })

@@ -59,7 +59,7 @@ const TimerScreen = ({
             isRunning={isRunning}
             isAlarm={isAlarm}
             duration={duration}
-            scrollViewRef={scrollViewRef.current}
+            scrollViewRef={scrollViewRef}
           />
           {/* İçindeki yürüyen insan ikonu (cinsiyete göre) */}
           <View style={styles.dialInner} pointerEvents="none">
