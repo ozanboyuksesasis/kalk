@@ -1,0 +1,22 @@
+// Gradle init script - TLS sorunları için
+allprojects {
+    repositories {
+        all { ArtifactRepository repo ->
+            if (repo instanceof MavenArtifactRepository) {
+                def url = repo.url.toString()
+                if (url.startsWith('https://')) {
+                    // TLS ayarları
+                    repo.credentials {
+                        // Boş bırak
+                    }
+                }
+            }
+        }
+    }
+}
+
+// System properties
+System.setProperty('https.protocols', 'TLSv1.2,TLSv1.3')
+System.setProperty('javax.net.ssl.trustStore', System.getProperty('java.home') + '/lib/security/cacerts')
+System.setProperty('javax.net.ssl.trustStorePassword', 'changeit')
+

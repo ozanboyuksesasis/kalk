@@ -14,9 +14,18 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
+import notifee from '@notifee/react-native';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getHealthMessage } from './utils/healthMessages';
+import {
+  createAlarmChannel,
+  displayAlarmNotification,
+  cancelAlarmNotification,
+  scheduleAlarmNotification,
+  setupNotificationHandlers,
+  requestNotifeePermissions,
+} from './services/alarmService';
 import Header from './components/Header';
 import Menu from './components/Menu';
 import TimerScreen from './components/TimerScreen';
@@ -132,7 +141,24 @@ export default function App() {
     loadSettings();
     requestPermissions();
     
+    // Notifee izinlerini iste
+    requestNotifeePermissions().catch(error => {
+      console.error('Notifee izinleri istenirken hata:', error);
+    });
+    
+    // Notifee alarm channel'ını oluştur
+    createAlarmChannel();
+    
+    // Notifee bildirim handler'larını kur
+    setupNotificationHandlers(() => {
+      // Alarm ekranını aç
+      if (!isAlarmRef.current) {
+        triggerAlarm();
+      }
+    });
+    
     // Android için notification channel'ları oluştur (dinamik - availableAlarmSounds'a göre)
+    // Notifee ile birlikte expo-notifications da kullanılabilir (geriye dönük uyumluluk)
     if (Platform.OS === 'android') {
       // Her alarm sesi için channel oluştur
       availableAlarmSounds.forEach(sound => {
@@ -149,8 +175,22 @@ export default function App() {
         });
       });
     }
-
   }, []);
+
+  // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU - Tüm zaman hesaplamaları buradan yapılacak
+  const calculateRemainingTime = () => {
+    if (!startTimeRef.current || !initialDurationRef.current) {
+      return null;
+    }
+    const now = Date.now();
+    const exactElapsed = Math.floor((now - startTimeRef.current) / 1000); // Tam saniye
+    const remaining = Math.max(0, initialDurationRef.current - exactElapsed); // Tam saniye
+    return {
+      elapsed: exactElapsed,
+      remaining: remaining,
+      isExpired: remaining <= 0,
+    };
+  };
 
   // Timer durumunu restore etme fonksiyonu (hem uygulama açılışında hem bildirim tıklandığında kullanılacak)
   const restoreTimerState = async (shouldTriggerAlarmIfExpired = false) => {
@@ -167,10 +207,21 @@ export default function App() {
       if (savedIsRunning === 'true' && savedStartTime && savedInitialDuration) {
         const startTime = parseInt(savedStartTime);
         const initialDuration = parseInt(savedInitialDuration);
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        const remaining = Math.max(0, initialDuration - elapsed);
         
-        if (remaining <= 0) {
+        // Ref'leri güncelle (calculateRemainingTime bunları kullanacak)
+        startTimeRef.current = startTime;
+        initialDurationRef.current = initialDuration;
+        
+        // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU KULLAN
+        const timeInfo = calculateRemainingTime();
+        if (!timeInfo) {
+          console.log('ℹ️ Timer durumu geçersiz (ref yok)');
+          return;
+        }
+        
+        const { remaining, isExpired } = timeInfo;
+        
+        if (isExpired) {
           // Süre dolmuş
           console.log('⏰ Timer süresi dolmuş, kalan süre:', remaining);
           
@@ -180,35 +231,29 @@ export default function App() {
           await AsyncStorage.removeItem('timerIsRunning');
           await AsyncStorage.removeItem('timerSnoozeCount');
           
-          // Eğer shouldTriggerAlarmIfExpired true ise alarm ekranını aç
-          if (shouldTriggerAlarmIfExpired) {
-            console.log('🚨 Süre dolmuş, alarm tetikleniyor...');
-            // BASİT: Direkt triggerAlarm çağır
-            // Önceki timeout'u iptal et
-            if (alarmTimeoutRef.current) {
-              clearTimeout(alarmTimeoutRef.current);
-            }
-            alarmTimeoutRef.current = setTimeout(async () => {
-              if (!isAlarmRef.current) {
-                await triggerAlarm();
-              }
-              alarmTimeoutRef.current = null;
-            }, 300);
-          } else {
-            // Timer durumunu sıfırla
-            setIsRunning(false);
-            setTimeLeft(0);
+          // 🔑 KRİTİK: Süre dolmuşsa her zaman alarm tetikle (bildirime tıklamadan açılsa bile)
+          // shouldTriggerAlarmIfExpired kontrolü kaldırıldı - süre dolmuşsa her zaman alarm aç
+          console.log('🚨 Süre dolmuş, alarm tetikleniyor...');
+          // Önceki timeout'u iptal et
+          if (alarmTimeoutRef.current) {
+            clearTimeout(alarmTimeoutRef.current);
           }
+          alarmTimeoutRef.current = setTimeout(async () => {
+            if (!isAlarmRef.current) {
+              await triggerAlarm();
+            }
+            alarmTimeoutRef.current = null;
+          }, 300);
         } else {
           // Timer devam ediyor, kalan süreyi göster
-          console.log('⏱️ Timer devam ediyor, kalan süre:', remaining, 'saniye');
+          // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU KULLAN (tutarlılık için)
+          console.log('⏱️ Timer devam ediyor, kalan süre:', remaining, 'saniye (tam saniye)');
           const initialDurationMinutes = initialDuration / 60; // dakika cinsinden
           setIsRunning(true);
-          setTimeLeft(remaining);
+          setTimeLeft(remaining); // Tek hesaplama fonksiyonundan gelen değer
           setInitialDuration(initialDurationMinutes);
           setDuration(initialDurationMinutes); // Halka için başlangıç süresini set et
-          startTimeRef.current = startTime;
-          initialDurationRef.current = initialDuration; // BAŞLANGIÇ süresi, kalan süre değil!
+          // startTimeRef.current ve initialDurationRef.current zaten yukarıda set edildi
         }
       } else {
         console.log('ℹ️ Timer durumu yok veya geçersiz');
@@ -282,8 +327,163 @@ export default function App() {
         setShowGenderSelection(true);
       }
       
-      // Timer durumunu restore et (uygulama açılışında alarm tetikleme)
-      await restoreTimerState(false);
+      // 🔑 KRİTİK: Killed state'te bildirimden açıldıysa yakala
+      // Expo Notifications - getLastNotificationResponseAsync (killed state için tek yol)
+      const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+      if (lastNotificationResponse) {
+        const notificationData = lastNotificationResponse.notification.request.content.data;
+        if (notificationData?.type === 'standup' || notificationData?.screen === 'Alarm') {
+          console.log('📱 Uygulama bildirimden açıldı (killed state - Expo):', notificationData);
+          
+          // Alarm verilerini state'e yükle
+          if (notificationData.snoozeCount !== undefined) {
+            setSnoozeCount(notificationData.snoozeCount || 0);
+          }
+          if (notificationData.firstSittingDuration !== undefined) {
+            setFirstSittingDuration(notificationData.firstSittingDuration);
+          }
+          if (notificationData.totalSittingDuration !== undefined) {
+            setTotalSittingDuration(notificationData.totalSittingDuration);
+          }
+          
+          // UI hazır olduktan sonra alarm ekranını aç (retry mekanizması ile)
+          const triggerAlarmWithRetry = async (retryCount = 0) => {
+            if (isAlarmRef.current) {
+              console.log('⚠️ Alarm zaten açık, atlanıyor');
+              return;
+            }
+            
+            if (retryCount < 5) {
+              // UI hazır olana kadar bekle
+              await new Promise(resolve => setTimeout(resolve, 300 + retryCount * 200));
+              
+              if (!isAlarmRef.current) {
+                console.log(`🚨 Bildirimden açıldı (Expo): Alarm tetikleniyor... (retry ${retryCount})`);
+                await triggerAlarm();
+              } else {
+                console.log('⚠️ Alarm zaten açık (retry sırasında), atlanıyor');
+              }
+            } else {
+              console.error('❌ Bildirimden açıldı (Expo): Alarm tetiklenemedi (max retry)');
+            }
+          };
+          
+          InteractionManager.runAfterInteractions(() => {
+            triggerAlarmWithRetry(0);
+          });
+          
+          // Bildirimden geldi, timer restore etme
+          return; // loadSettings'ten çık
+        }
+      }
+      
+      // Notifee - getInitialNotification (killed state için)
+      try {
+        const initialNotification = await notifee.getInitialNotification();
+        if (initialNotification) {
+          const notificationData = initialNotification.notification?.data;
+          if (notificationData?.type === 'standup' || notificationData?.screen === 'Alarm') {
+            console.log('📱 Uygulama bildirimden açıldı (killed state - Notifee):', notificationData);
+            
+            // Alarm verilerini state'e yükle
+            if (notificationData.snoozeCount !== undefined) {
+              setSnoozeCount(notificationData.snoozeCount || 0);
+            }
+            if (notificationData.firstSittingDuration !== undefined) {
+              setFirstSittingDuration(notificationData.firstSittingDuration);
+            }
+            if (notificationData.totalSittingDuration !== undefined) {
+              setTotalSittingDuration(notificationData.totalSittingDuration);
+            }
+            
+            // UI hazır olduktan sonra alarm ekranını aç (retry mekanizması ile)
+            const triggerAlarmWithRetry = async (retryCount = 0) => {
+              if (isAlarmRef.current) {
+                console.log('⚠️ Alarm zaten açık, atlanıyor');
+                return;
+              }
+              
+              if (retryCount < 5) {
+                // UI hazır olana kadar bekle
+                await new Promise(resolve => setTimeout(resolve, 300 + retryCount * 200));
+                
+                if (!isAlarmRef.current) {
+                  console.log(`🚨 Bildirimden açıldı (Notifee): Alarm tetikleniyor... (retry ${retryCount})`);
+                  await triggerAlarm();
+                } else {
+                  console.log('⚠️ Alarm zaten açık (retry sırasında), atlanıyor');
+                }
+              } else {
+                console.error('❌ Bildirimden açıldı (Notifee): Alarm tetiklenemedi (max retry)');
+              }
+            };
+            
+            InteractionManager.runAfterInteractions(() => {
+              triggerAlarmWithRetry(0);
+            });
+            
+            // Bildirimden geldi, timer restore etme
+            return; // loadSettings'ten çık
+          }
+        }
+      } catch (error) {
+        console.error('Notifee getInitialNotification hatası:', error);
+      }
+      
+      // ACTIVE_ALARM kontrolü (fallback - background handler'dan kaydedilmiş olabilir)
+      const activeAlarm = await AsyncStorage.getItem('ACTIVE_ALARM');
+      if (activeAlarm) {
+        try {
+          const alarmData = JSON.parse(activeAlarm);
+          console.log('📱 ACTIVE_ALARM bulundu, alarm ekranı açılıyor:', alarmData);
+          
+          // HEMEN: ACTIVE_ALARM'ı temizle (2. kez açılmayı önlemek için)
+          await AsyncStorage.removeItem('ACTIVE_ALARM');
+          
+          // Alarm verilerini state'e yükle
+          if (alarmData.snoozeCount !== undefined) {
+            setSnoozeCount(alarmData.snoozeCount);
+          }
+          if (alarmData.firstSittingDuration !== undefined) {
+            setFirstSittingDuration(alarmData.firstSittingDuration);
+          }
+          if (alarmData.totalSittingDuration !== undefined) {
+            setTotalSittingDuration(alarmData.totalSittingDuration);
+          }
+          
+          // UI hazır olduktan sonra alarm ekranını aç (retry mekanizması ile)
+          const triggerAlarmWithRetry = async (retryCount = 0) => {
+            if (isAlarmRef.current) {
+              console.log('⚠️ Alarm zaten açık, atlanıyor');
+              return;
+            }
+            
+            if (retryCount < 5) {
+              // UI hazır olana kadar bekle
+              await new Promise(resolve => setTimeout(resolve, 300 + retryCount * 200));
+              
+              if (!isAlarmRef.current) {
+                console.log(`🚨 ACTIVE_ALARM: Alarm tetikleniyor... (retry ${retryCount})`);
+                await triggerAlarm();
+              } else {
+                console.log('⚠️ Alarm zaten açık (retry sırasında), atlanıyor');
+              }
+            } else {
+              console.error('❌ ACTIVE_ALARM: Alarm tetiklenemedi (max retry)');
+            }
+          };
+          
+          InteractionManager.runAfterInteractions(() => {
+            triggerAlarmWithRetry(0);
+          });
+        } catch (error) {
+          console.error('❌ ACTIVE_ALARM parse edilemedi:', error);
+          await AsyncStorage.removeItem('ACTIVE_ALARM');
+        }
+      } else {
+        // ACTIVE_ALARM yoksa normal timer durumunu restore et
+        await restoreTimerState(false);
+      }
       
       // İlk oturma süresini ve toplam oturma süresini yükle (timer çalışsa da çalışmasa da)
       const savedFirstSittingDuration = await AsyncStorage.getItem('firstSittingDuration');
@@ -547,38 +747,153 @@ export default function App() {
         // Uygulama ön plana geldiğinde (background'dan veya kapalı durumdan)
         console.log('📱 Uygulama ön plana geldi (background/inactive -> active)');
         
-        // Timer durumunu restore et (AMA alarm tetikleme - sadece timer devam etsin)
-        // shouldTriggerAlarmIfExpired: false - çünkü bu normal arka plan/ön plan geçişi
-        // restoreTimerState zaten kalan süreyi hesaplayıp setTimeLeft yapıyor, ekstra hesaplama gerekmez
-        await restoreTimerState(false);
+        // 🔑 KRİTİK: Uygulama açıkken tüm planlanmış bildirimleri iptal et
+        // Arka plana geçince planlanan bildirimler uygulama açıkken tetiklenmemeli
+        (async () => {
+          try {
+            await Notifications.cancelAllScheduledNotificationsAsync();
+            await cancelAlarmNotification();
+            console.log('✅ Uygulama açıldı, tüm planlanmış bildirimler iptal edildi');
+          } catch (error) {
+            console.error('❌ Bildirim iptal hatası (foreground):', error);
+          }
+        })();
         
-        // Timer çalışıyorsa ve interval yoksa yeniden başlat (arka planda durdurulmuş olabilir)
-        if (isRunning && startTimeRef.current && initialDurationRef.current && !intervalRef.current && !isAlarm) {
-          const updateTimer = () => {
-            const now = Date.now();
-            const elapsed = Math.floor((now - startTimeRef.current) / 1000);
-            const remaining = Math.max(0, initialDurationRef.current - elapsed);
+        // ACTIVE_ALARM kontrolü (bildirimden geldiğinde)
+        // ÖNEMLİ: Alarm zaten açıksa kontrol etme (2. kez açılmayı önle)
+        if (isAlarmRef.current) {
+          console.log('⚠️ Alarm zaten açık (AppState), ACTIVE_ALARM kontrolü atlanıyor');
+          return;
+        }
+        
+        const activeAlarm = await AsyncStorage.getItem('ACTIVE_ALARM');
+        if (activeAlarm) {
+          try {
+            const alarmData = JSON.parse(activeAlarm);
+            console.log('📱 ACTIVE_ALARM bulundu (AppState change), alarm ekranı açılıyor:', alarmData);
             
-            if (remaining <= 0) {
-              if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-              }
-              triggerAlarm();
-              setTimeLeft(0);
-            } else {
-              setTimeLeft((prev) => (prev === remaining ? prev : remaining));
+            // HEMEN: ACTIVE_ALARM'ı temizle (2. kez açılmayı önlemek için)
+            await AsyncStorage.removeItem('ACTIVE_ALARM');
+            
+            // Tekrar kontrol et (race condition önleme)
+            if (isAlarmRef.current) {
+              console.log('⚠️ Alarm zaten açık (ACTIVE_ALARM temizlendikten sonra), atlanıyor');
+              return;
             }
-          };
-          updateTimer(); // Hemen güncelle
-          intervalRef.current = setInterval(updateTimer, 1000);
+            
+            // Alarm verilerini state'e yükle
+            if (alarmData.snoozeCount !== undefined) {
+              setSnoozeCount(alarmData.snoozeCount);
+            }
+            if (alarmData.firstSittingDuration !== undefined) {
+              setFirstSittingDuration(alarmData.firstSittingDuration);
+            }
+            if (alarmData.totalSittingDuration !== undefined) {
+              setTotalSittingDuration(alarmData.totalSittingDuration);
+            }
+            
+            // UI hazır olduktan sonra alarm ekranını aç
+            InteractionManager.runAfterInteractions(() => {
+              setTimeout(async () => {
+                // Son bir kontrol daha (race condition önleme)
+                if (!isAlarmRef.current) {
+                  console.log('🚨 ACTIVE_ALARM (AppState): Alarm tetikleniyor...');
+                  await triggerAlarm();
+                } else {
+                  console.log('⚠️ Alarm zaten açık (timeout sırasında), atlanıyor');
+                }
+              }, 300); // UI'nin tamamen hazır olması için bekle
+            });
+          } catch (error) {
+            console.error('❌ ACTIVE_ALARM parse edilemedi (AppState):', error);
+            await AsyncStorage.removeItem('ACTIVE_ALARM');
+          }
+        } else {
+          // ACTIVE_ALARM yoksa normal timer durumunu restore et
+          // Timer durumunu restore et (AMA alarm tetikleme - sadece timer devam etsin)
+          // shouldTriggerAlarmIfExpired: false - çünkü bu normal arka plan/ön plan geçişi
+          // restoreTimerState zaten kalan süreyi hesaplayıp setTimeLeft yapıyor, ekstra hesaplama gerekmez
+          await restoreTimerState(false);
+          
+          // Timer çalışıyorsa ve interval yoksa yeniden başlat (arka planda durdurulmuş olabilir)
+          if (isRunning && startTimeRef.current && initialDurationRef.current && !intervalRef.current && !isAlarm) {
+            const updateTimer = () => {
+              // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU KULLAN (tutarlılık için)
+              const timeInfo = calculateRemainingTime();
+              if (!timeInfo) {
+                return;
+              }
+              
+              const { remaining, isExpired } = timeInfo;
+              
+              if (isExpired) {
+                if (intervalRef.current) {
+                  clearInterval(intervalRef.current);
+                  intervalRef.current = null;
+                }
+                triggerAlarm();
+                setTimeLeft(0);
+              } else {
+                setTimeLeft((prev) => (prev === remaining ? prev : remaining));
+              }
+            };
+            updateTimer(); // Hemen güncelle
+            intervalRef.current = setInterval(updateTimer, 1000);
+          }
         }
       } else if (prevAppState === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
         // Arka plana geçtiğinde interval'i durdur (battery optimization)
-        // Timer state AsyncStorage'da zaten kayıtlı, notification zaten planlanmış
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
+        }
+        
+        // 🔑 KRİTİK: Timer çalışıyorsa, kalan süreye göre bildirimi güncelle
+        if (isRunning && startTimeRef.current && initialDurationRef.current) {
+          // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU KULLAN (tutarlılık için)
+          const timeInfo = calculateRemainingTime();
+          if (!timeInfo) {
+            return;
+          }
+          
+          const { remaining, isExpired } = timeInfo;
+          
+          if (!isExpired && remaining > 0) {
+            console.log(`📱 Uygulama arka plana geçti, kalan süre: ${remaining} saniye, bildirim güncelleniyor...`);
+            
+            // Mevcut bildirimleri iptal et
+            await Notifications.cancelAllScheduledNotificationsAsync();
+            await cancelAlarmNotification();
+            
+            // Kalan süreye göre yeni bildirim planla (tam 1 saniye hassasiyet)
+            try {
+              // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU KULLAN - remaining zaten tam saniye
+              const now = Date.now();
+              const remainingSeconds = remaining; // Zaten tam saniye (calculateRemainingTime'dan geliyor)
+              const triggerTimestamp = now + (remainingSeconds * 1000); // Tam saniye hassasiyeti
+              const triggerDate = new Date(triggerTimestamp);
+              
+              const savedSnoozeCount = await AsyncStorage.getItem('timerSnoozeCount');
+              const savedFirst = await AsyncStorage.getItem('firstSittingDuration');
+              const savedTotal = await AsyncStorage.getItem('totalSittingDuration');
+              
+              await scheduleAlarmNotification(triggerDate, {
+                title: 'Kalkma Zamanı! 🚶',
+                body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+                data: {
+                  snoozeCount: savedSnoozeCount ? parseInt(savedSnoozeCount) : 0,
+                  firstSittingDuration: savedFirst ? parseFloat(savedFirst) : null,
+                  totalSittingDuration: savedTotal ? parseFloat(savedTotal) : null,
+                },
+              });
+              console.log(`✅ Bildirim güncellendi: ${remainingSeconds} saniye sonra (${Math.floor(remainingSeconds / 60)} dakika, tam ${remainingSeconds} saniye)`);
+            } catch (error) {
+              console.error('❌ Bildirim güncellenirken hata:', error);
+            }
+          } else {
+            // Süre dolmuş, bildirim zaten gelmiş olabilir
+            console.log('⚠️ Süre dolmuş, bildirim güncellenmedi');
+          }
         }
       }
     });
@@ -605,18 +920,36 @@ export default function App() {
       // Bu sayede her saniye re-render olmuyor, sadece gerçek zaman hesaplaması yapılıyor
       
       // İlk güncellemeyi hemen yap (gecikme olmadan)
-      const updateTimer = () => {
-        // Gerçek zamanı hesapla (Date.now() tabanlı - sistem saatinden bağımsız, çok hassas)
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTimeRef.current) / 1000);
-        const remaining = Math.max(0, initialDurationRef.current - elapsed);
+      const updateTimer = async () => {
+        // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU KULLAN (tutarlılık için)
+        const timeInfo = calculateRemainingTime();
+        if (!timeInfo) {
+          return;
+        }
         
-        if (remaining <= 0) {
+        const { remaining, isExpired } = timeInfo;
+        
+        if (isExpired) {
           // Süre doldu, alarm tetikle
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
           }
+          
+          // 🔑 KRİTİK: Uygulama açıkken bildirimi MUTLAKA iptal et (bildirim gönderilmemeli)
+          const appState = AppState.currentState;
+          if (appState === 'active') {
+            console.log('📱 Uygulama açıkken timer doldu, bildirim iptal ediliyor...');
+            // Blocking: await kullanarak kesin iptal et
+            try {
+              await Notifications.cancelAllScheduledNotificationsAsync();
+              await cancelAlarmNotification();
+              console.log('✅ Tüm bildirimler iptal edildi (uygulama açıkken)');
+            } catch (err) {
+              console.error('❌ Bildirim iptal hatası:', err);
+            }
+          }
+          
           // Alarm zaten açıksa tekrar tetikleme
           if (!isAlarmRef.current) {
             triggerAlarm();
@@ -794,6 +1127,15 @@ export default function App() {
     setTotalSittingDuration(savedTotalSittingDuration);
     startTimeRef.current = null;
     initialDurationRef.current = null;
+    
+    // ACTIVE_ALARM'ı temizle (alarm ekranı açıldı, artık gerekli değil)
+    // Bu, bildirimden geldiğinde kaydedilmiş olabilir
+    // await kullanmadan hemen temizle (non-blocking)
+    AsyncStorage.removeItem('ACTIVE_ALARM').then(() => {
+      console.log('✅ ACTIVE_ALARM temizlendi (triggerAlarm)');
+    }).catch(err => {
+      console.error('ACTIVE_ALARM temizlenirken hata:', err);
+    });
 
     // Ayarları AsyncStorage'dan direkt oku (her zaman güncel garantisi)
     let currentEnableVibration = true;
@@ -862,6 +1204,11 @@ export default function App() {
     } else {
       console.log('🔇 Ses kapalı, ses çalınmayacak');
     }
+    
+    // NOT: displayAlarmNotification kaldırıldı - çift bildirim önleme
+    // Planlanmış bildirim (scheduleAlarmNotification) zaten gelecek
+    // Eğer uygulama açıkken timer dolduysa, planlanmış bildirim zaten tetiklenecek
+    console.log('ℹ️ Planlanmış bildirim zaten gelecek, displayAlarmNotification çağrılmıyor (çift bildirim önleme)');
     
     // Scheduled notification zaten planlanmış, arka planda kendisi tetiklenecek
     // Uygulama açıkken bu fonksiyon çağrıldığında sadece alarm ekranını gösteriyoruz
@@ -1185,25 +1532,48 @@ export default function App() {
       
       // saveSettings() kaldırıldı - sadece "Kaydet" butonuna basıldığında kaydedilecek
 
-      // Bildirim gönder (hem Android hem iOS için)
+      // 🔑 KRİTİK: Uygulama açıkken bildirim planlama - SADECE arka plana geçince planlanacak
+      // Uygulama açıkken bildirim planlamayalım, çünkü timer dolduğunda zaten alarm ekranı gösterilecek
       await Notifications.cancelAllScheduledNotificationsAsync();
+      await cancelAlarmNotification(); // Notifee bildirimlerini de iptal et
       
-      // Saniye değerinin geçerli olduğundan emin ol
-      if (seconds > 0 && !isNaN(seconds)) {
-        try {
-          await Notifications.scheduleNotificationAsync({
-            content: createStandupNotificationContent(),
-            trigger: {
-              type: 'timeInterval',
-              seconds: Math.max(1, Math.floor(seconds)),
-            },
-          });
-          console.log(`Alarm planlandı: ${seconds} saniye sonra (${Platform.OS})`);
-        } catch (error) {
-          console.error('Alarm planlanırken hata:', error);
-        }
+      // 🔑 UYGULAMA AÇIKKEN BİLDİRİM PLANLAMA - Sadece arka plana geçince planlanacak
+      const appState = AppState.currentState;
+      if (appState === 'active') {
+        console.log('📱 Uygulama açıkken bildirim planlanmıyor - arka plana geçince planlanacak');
+        // Bildirim planlamayalım, sadece arka plana geçince planlanacak (AppState listener'da)
       } else {
-        console.warn('Geçersiz süre değeri, alarm planlanamadı:', seconds);
+        // Uygulama arka planda veya inactive ise bildirim planla
+        // Saniye değerinin geçerli olduğundan emin ol
+        if (seconds > 0 && !isNaN(seconds)) {
+          try {
+            // Notifee ile alarm planla (mutlak tarih - tam 1 saniye hassasiyet)
+            const now = Date.now();
+            const exactSeconds = Math.floor(seconds); // Tam saniye (ondalık kısmı at)
+            const triggerTimestamp = now + (exactSeconds * 1000); // Tam saniye hassasiyeti
+            const triggerDate = new Date(triggerTimestamp);
+            
+            const timeUntilAlarm = Math.floor((triggerTimestamp - now) / 1000);
+            console.log(`⏰ Alarm planlanıyor (arka planda): ${duration} dakika (${exactSeconds} saniye, tam saniye)`);
+            console.log(`📅 Şu an: ${new Date(now).toLocaleTimeString('tr-TR')}`);
+            console.log(`🔔 Bildirim zamanı: ${triggerDate.toLocaleTimeString('tr-TR')} (${timeUntilAlarm} saniye sonra, tam ${exactSeconds} saniye)`);
+            
+            await scheduleAlarmNotification(triggerDate, {
+              title: 'Kalkma Zamanı! 🚶',
+              body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+              data: {
+                snoozeCount: 0,
+                firstSittingDuration: duration,
+                totalSittingDuration: duration,
+              },
+            });
+            console.log(`✅ Notifee alarm planlandı: ${seconds} saniye sonra (${Platform.OS})`);
+          } catch (error) {
+            console.error('Alarm planlanırken hata:', error);
+          }
+        } else {
+          console.warn('Geçersiz süre değeri, alarm planlanamadı:', seconds);
+        }
       }
     }
   };
@@ -1247,6 +1617,14 @@ export default function App() {
     isAlarmRef.current = false;
     setIsAlarm(false);
     setIsRunning(false);
+    
+    // HEMEN: ACTIVE_ALARM'ı temizle (bildirimden geldiğinde kaydedilmiş olabilir)
+    // await kullanmadan hemen temizle (non-blocking)
+    AsyncStorage.removeItem('ACTIVE_ALARM').then(() => {
+      console.log('✅ ACTIVE_ALARM temizlendi (handleStandUp)');
+    }).catch(err => {
+      console.error('ACTIVE_ALARM temizlenirken hata:', err);
+    });
     
     // HEMEN: Pending alarm timeout'larını iptal et (tekrar açılmayı önle)
     if (alarmTimeoutRef.current) {
@@ -1299,6 +1677,17 @@ export default function App() {
         Vibration.cancel();
       }
       
+      // HEMEN: Alarm durumunu kapat (UI hemen güncellensin)
+      isAlarmRef.current = false;
+      
+      // HEMEN: ACTIVE_ALARM'ı temizle (bildirimden geldiğinde kaydedilmiş olabilir)
+      // await kullanmadan hemen temizle (non-blocking)
+      AsyncStorage.removeItem('ACTIVE_ALARM').then(() => {
+        console.log('✅ ACTIVE_ALARM temizlendi (handleSnooze)');
+      }).catch(err => {
+        console.error('ACTIVE_ALARM temizlenirken hata:', err);
+      });
+      
       const newSnoozeCount = snoozeCount + 1;
       const seconds = Math.floor(snoozeDuration * 60);
       const startTime = Date.now();
@@ -1308,9 +1697,9 @@ export default function App() {
       
       setSnoozeCount(newSnoozeCount);
       setTimeLeft(seconds);
-      setIsRunning(true);
-      setIsAlarm(false);
-      isAlarmRef.current = false; // Ref'i de güncelle
+    setIsRunning(true);
+    setIsAlarm(false);
+    // isAlarmRef.current zaten yukarıda false yapıldı
       setInitialDuration(snoozeDuration); // Erteleme süresini initialDuration olarak ayarla
       setTotalSittingDuration(newTotalSittingDuration);
       startTimeRef.current = startTime; // Yeni başlangıç zamanı
@@ -1335,26 +1724,42 @@ export default function App() {
         }
       })();
       
-      // ARKA PLANDA: Yeni erteleme için notification planla (UI'ı bloklamadan)
+      // ARKA PLANDA: Yeni erteleme için notification planla (UI'ı bloklamadan) - Notifee ile
       (async () => {
         await Notifications.cancelAllScheduledNotificationsAsync();
+        await cancelAlarmNotification(); // Notifee bildirimlerini de iptal et
         
-        // Saniye değerinin geçerli olduğundan emin ol
-        if (seconds > 0 && !isNaN(seconds)) {
-          try {
-            await Notifications.scheduleNotificationAsync({
-              content: createStandupNotificationContent(),
-              trigger: {
-                type: 'timeInterval',
-                seconds: Math.max(1, Math.floor(seconds)),
-              },
-            });
-            console.log(`Erteleme bildirimi planlandı: ${seconds} saniye sonra (${Platform.OS})`);
-          } catch (error) {
-            console.error('Erteleme bildirimi planlanırken hata:', error);
-          }
+        // 🔑 UYGULAMA AÇIKKEN BİLDİRİM PLANLAMA - Sadece arka plana geçince planlanacak
+        const appState = AppState.currentState;
+        if (appState === 'active') {
+          console.log('📱 Uygulama açıkken erteleme bildirimi planlanmıyor - arka plana geçince planlanacak');
+          // Bildirim planlamayalım, sadece arka plana geçince planlanacak (AppState listener'da)
         } else {
-          console.warn('Geçersiz erteleme süresi, bildirim planlanamadı:', seconds);
+          // Uygulama arka planda veya inactive ise bildirim planla
+          // Saniye değerinin geçerli olduğundan emin ol
+          if (seconds > 0 && !isNaN(seconds)) {
+            try {
+              // Notifee ile alarm planla (tam 1 saniye hassasiyet)
+              const now = Date.now();
+              const exactSeconds = Math.floor(seconds); // Tam saniye (ondalık kısmı at)
+              const triggerTimestamp = now + (exactSeconds * 1000); // Tam saniye hassasiyeti
+              const triggerDate = new Date(triggerTimestamp);
+              await scheduleAlarmNotification(triggerDate, {
+                title: 'Kalkma Zamanı! 🚶',
+                body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+                data: {
+                  snoozeCount: newSnoozeCount,
+                  firstSittingDuration: firstSittingDuration || duration,
+                  totalSittingDuration: newTotalSittingDuration,
+                },
+              });
+              console.log(`✅ Notifee erteleme alarm planlandı: ${exactSeconds} saniye sonra (${Platform.OS}, tam ${exactSeconds} saniye)`);
+            } catch (error) {
+              console.error('Erteleme bildirimi planlanırken hata:', error);
+            }
+          } else {
+            console.warn('Geçersiz erteleme süresi, bildirim planlanamadı:', seconds);
+          }
         }
       })();
     }
