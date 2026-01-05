@@ -156,20 +156,20 @@ export const scheduleAlarmNotification = async (triggerDate, options = {}) => {
     return null;
   }
 
+  // Channel oluşturma (Android)
+  if (Platform.OS === 'android') {
+    await createAlarmChannel();
+  }
+
   // Android için full-screen alarm
   const androidConfig = Platform.OS === 'android' ? {
     channelId: ALARM_CHANNEL_ID,
     importance: AndroidImportance.HIGH,
-    fullScreenAction: {
-      id: 'default',
-    },
     pressAction: {
       id: 'default',
     },
     sound: 'default',
-      vibrationPattern: [500, 200, 500, 200, 500, 200], // Çift sayıda pozitif değer (6 eleman)
-    ongoing: true, // Kullanıcı kapatamaz
-    autoCancel: false,
+    vibrationPattern: [500, 200, 500, 200, 500, 200],
   } : {};
 
   // iOS için time-sensitive bildirim
@@ -177,6 +177,15 @@ export const scheduleAlarmNotification = async (triggerDate, options = {}) => {
     sound: 'default',
     interruptionLevel: 'timeSensitive',
   } : {};
+
+  const triggerTimestamp = triggerDate.getTime();
+  const now = Date.now();
+  
+  // Geçmiş zaman kontrolü
+  if (triggerTimestamp <= now) {
+    console.error('❌ HATA: Trigger timestamp geçmiş bir zaman!');
+    return null;
+  }
 
   try {
     const notificationId = await notifee.createTriggerNotification(
@@ -193,15 +202,14 @@ export const scheduleAlarmNotification = async (triggerDate, options = {}) => {
       },
       {
         type: TriggerType.TIMESTAMP,
-        timestamp: triggerDate.getTime(),
+        timestamp: triggerTimestamp,
       }
     );
 
-    console.log('✅ Notifee alarm bildirimi planlandı:', notificationId, 'Tarih:', triggerDate.toISOString());
+    console.log('✅ Notifee alarm bildirimi planlandı:', notificationId);
     return notificationId;
   } catch (error) {
     console.error('❌ Notifee alarm bildirimi planlanamadı:', error);
-    // Hata detaylarını logla
     if (error.message) {
       console.error('Hata mesajı:', error.message);
     }

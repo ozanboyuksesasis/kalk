@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, ActivityIndicator } from 'react-native';
 
 const SettingsScreen = ({
   snoozeDuration: initialSnoozeDuration,
@@ -21,6 +21,7 @@ const SettingsScreen = ({
   const [enableVibration, setEnableVibration] = useState(initialEnableVibration);
   const [enableSound, setEnableSound] = useState(initialEnableSound);
   const [alarmSound, setAlarmSound] = useState(initialAlarmSound);
+  const [isClearing, setIsClearing] = useState(false);
   
   // Props değiştiğinde local state'i güncelle (ekran yeniden açıldığında)
   useEffect(() => {
@@ -202,10 +203,22 @@ const SettingsScreen = ({
         <View style={styles.settingItem}>
           <Text style={styles.settingLabel}>Veri Yönetimi</Text>
           <TouchableOpacity
-            style={styles.clearDataButton}
-            onPress={onClearData}
+            style={[styles.clearDataButton, isClearing && styles.clearDataButtonDisabled]}
+            onPress={() => {
+              if (!isClearing && onClearData) {
+                onClearData(setIsClearing);
+              }
+            }}
+            disabled={isClearing}
           >
-            <Text style={styles.clearDataButtonText}>🗑️ Verileri Temizle</Text>
+            {isClearing ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.clearDataButtonText}>Temizleniyor...</Text>
+              </View>
+            ) : (
+              <Text style={styles.clearDataButtonText}>🗑️ Verileri Temizle</Text>
+            )}
           </TouchableOpacity>
           <Text style={styles.clearDataDescription}>
             Tüm istatistik verileri ve timer durumları silinir
@@ -328,10 +341,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
+  clearDataButtonDisabled: {
+    backgroundColor: '#FF8A65',
+    opacity: 0.7,
+  },
   clearDataButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   clearDataDescription: {
     fontSize: 12,

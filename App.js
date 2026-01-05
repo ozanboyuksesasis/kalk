@@ -225,11 +225,12 @@ export default function App() {
           // Süre dolmuş
           console.log('⏰ Timer süresi dolmuş, kalan süre:', remaining);
           
-          // Timer durumunu temizle
+          // Timer durumunu temizle (AMA timerSnoozeCount'u SİLME - istatistikler için gerekli!)
           await AsyncStorage.removeItem('timerStartTime');
           await AsyncStorage.removeItem('timerInitialDuration');
           await AsyncStorage.removeItem('timerIsRunning');
-          await AsyncStorage.removeItem('timerSnoozeCount');
+          // 🔑 KRİTİK: timerSnoozeCount'u SİLME - handleStandUp'ta istatistikler için kullanılacak
+          // await AsyncStorage.removeItem('timerSnoozeCount'); // SİLİNDİ - istatistikler için gerekli
           
           // 🔑 KRİTİK: Süre dolmuşsa her zaman alarm tetikle (bildirime tıklamadan açılsa bile)
           // shouldTriggerAlarmIfExpired kontrolü kaldırıldı - süre dolmuşsa her zaman alarm aç
@@ -337,7 +338,14 @@ export default function App() {
           
           // Alarm verilerini state'e yükle
           if (notificationData.snoozeCount !== undefined) {
-            setSnoozeCount(notificationData.snoozeCount || 0);
+            const snoozeCountValue = notificationData.snoozeCount || 0;
+            setSnoozeCount(snoozeCountValue);
+            // 🔑 AsyncStorage'a da kaydet (handleStandUp'ta okunacak)
+            AsyncStorage.setItem('timerSnoozeCount', snoozeCountValue.toString()).then(() => {
+              console.log('💾 Erteleme sayısı AsyncStorage\'a kaydedildi (bildirimden):', snoozeCountValue);
+            }).catch(err => {
+              console.error('Erteleme sayısı kaydedilemedi:', err);
+            });
           }
           if (notificationData.firstSittingDuration !== undefined) {
             setFirstSittingDuration(notificationData.firstSittingDuration);
@@ -387,7 +395,11 @@ export default function App() {
             
             // Alarm verilerini state'e yükle
             if (notificationData.snoozeCount !== undefined) {
-              setSnoozeCount(notificationData.snoozeCount || 0);
+              const snoozeCountValue = notificationData.snoozeCount || 0;
+              setSnoozeCount(snoozeCountValue);
+              // 🔑 AsyncStorage'a da kaydet (handleStandUp'ta okunacak)
+              await AsyncStorage.setItem('timerSnoozeCount', snoozeCountValue.toString());
+              console.log('💾 Erteleme sayısı AsyncStorage\'a kaydedildi (bildirimden - Notifee):', snoozeCountValue);
             }
             if (notificationData.firstSittingDuration !== undefined) {
               setFirstSittingDuration(notificationData.firstSittingDuration);
@@ -442,7 +454,14 @@ export default function App() {
           
           // Alarm verilerini state'e yükle
           if (alarmData.snoozeCount !== undefined) {
-            setSnoozeCount(alarmData.snoozeCount);
+            const snoozeCountValue = alarmData.snoozeCount || 0;
+            setSnoozeCount(snoozeCountValue);
+            // 🔑 AsyncStorage'a da kaydet (handleStandUp'ta okunacak)
+            AsyncStorage.setItem('timerSnoozeCount', snoozeCountValue.toString()).then(() => {
+              console.log('💾 Erteleme sayısı AsyncStorage\'a kaydedildi (ACTIVE_ALARM):', snoozeCountValue);
+            }).catch(err => {
+              console.error('Erteleme sayısı kaydedilemedi:', err);
+            });
           }
           if (alarmData.firstSittingDuration !== undefined) {
             setFirstSittingDuration(alarmData.firstSittingDuration);
@@ -531,12 +550,17 @@ export default function App() {
       // Yeni session verilerini ekle
       stats.totalSittingTime += sessionData.totalDuration || 0;
       stats.alarmCount += 1;
-      stats.snoozeCount += sessionData.snoozeCount || 0;
+      // 🔑 Erteleme sayısı: Mevcut session'daki erteleme sayısını TOPLAM erteleme sayısına ekle
+      const sessionSnoozeCount = sessionData.snoozeCount || 0;
+      const oldSnoozeCount = stats.snoozeCount || 0;
+      stats.snoozeCount = oldSnoozeCount + sessionSnoozeCount; // Toplam erteleme sayısı
       stats.sessions.push({
         duration: sessionData.totalDuration || 0,
-        snoozes: sessionData.snoozeCount || 0,
+        snoozes: sessionSnoozeCount, // Bu session'daki erteleme sayısı
         timestamp: Date.now(),
       });
+      
+      console.log('📊 İstatistik kaydediliyor - Session erteleme:', sessionSnoozeCount, 'Eski toplam:', oldSnoozeCount, 'Yeni toplam:', stats.snoozeCount);
       
       // Kaydet
       await AsyncStorage.setItem(statsKey, JSON.stringify(stats));
@@ -548,7 +572,7 @@ export default function App() {
 
 
   // Tüm verileri temizle (test için)
-  const clearAllData = async () => {
+  const clearAllData = async (setLoading) => {
     showAlert(
       'Verileri Temizle',
       'Tüm istatistik verileri ve timer durumları silinecek. Bu işlem geri alınamaz. Emin misiniz?',
@@ -562,6 +586,9 @@ export default function App() {
           text: 'Temizle',
           style: 'destructive',
           onPress: async () => {
+            // Loading'i başlat
+            if (setLoading) setLoading(true);
+            
             try {
               // Tüm günlük istatistikleri temizle
               const keys = await AsyncStorage.getAllKeys();
@@ -590,6 +617,9 @@ export default function App() {
               // Scheduled notification'ları iptal et
               await Notifications.cancelAllScheduledNotificationsAsync();
               
+              // Loading'i durdur
+              if (setLoading) setLoading(false);
+              
               showAlert('Başarılı', 'Tüm veriler temizlendi.', [
                 {
                   text: 'Tamam',
@@ -598,6 +628,10 @@ export default function App() {
               ]);
             } catch (error) {
               console.error('Veriler temizlenirken hata:', error);
+              
+              // Loading'i durdur
+              if (setLoading) setLoading(false);
+              
               showAlert('Hata', 'Veriler temizlenirken bir hata oluştu.', [
                 {
                   text: 'Tamam',
@@ -1595,7 +1629,8 @@ export default function App() {
       await AsyncStorage.removeItem('timerStartTime');
       await AsyncStorage.removeItem('timerInitialDuration');
       await AsyncStorage.removeItem('timerIsRunning');
-      await AsyncStorage.removeItem('timerSnoozeCount');
+      // 🔑 KRİTİK: timerSnoozeCount'u SİLME - istatistikler kaydedildikten SONRA silinecek
+      // await AsyncStorage.removeItem('timerSnoozeCount'); // handleStandUp içinde istatistikler kaydedildikten sonra silinecek
       await AsyncStorage.removeItem('firstSittingDuration');
       await AsyncStorage.removeItem('totalSittingDuration');
     } catch (error) {
@@ -1643,16 +1678,47 @@ export default function App() {
     
     // ARKA PLANDA: İstatistikleri kaydet (UI'ı bloklamadan)
     if (totalSittingDuration !== null && totalSittingDuration > 0) {
-      saveDailyStatistics({
-        totalDuration: totalSittingDuration,
-        snoozeCount: snoozeCount || 0,
-      }).then(() => {
-        console.log('📊 İstatistikler kaydedildi');
-        // İstatistikler kaydedildikten sonra refresh key'i artır (ekran açıksa yenilenecek)
-        setStatisticsRefreshKey(prev => prev + 1);
-      }).catch(err => {
-        console.error('İstatistik kaydetme hatası:', err);
-      });
+      // 🔑 Erteleme sayısını state'ten kullan (en güncel değer)
+      // State güncellemesi asenkron olabilir ama bildirimden geldiğinde zaten state'e yüklenmiş olmalı
+      (async () => {
+        try {
+          // Önce state'ten oku (en güncel değer)
+          let finalSnoozeCount = snoozeCount || 0;
+          
+          // AsyncStorage'dan da oku (fallback - eğer state 0 ise)
+          const savedSnoozeCount = await AsyncStorage.getItem('timerSnoozeCount');
+          console.log('📊 Erteleme sayısı kontrolü - State:', snoozeCount, 'AsyncStorage:', savedSnoozeCount);
+          
+          // State'te değer varsa onu kullan, yoksa AsyncStorage'dan oku
+          if (snoozeCount > 0) {
+            finalSnoozeCount = snoozeCount;
+            console.log('📊 State\'ten erteleme sayısı kullanılıyor:', finalSnoozeCount);
+          } else if (savedSnoozeCount) {
+            finalSnoozeCount = parseInt(savedSnoozeCount);
+            console.log('📊 AsyncStorage\'dan erteleme sayısı kullanılıyor:', finalSnoozeCount);
+          } else {
+            console.log('📊 Erteleme sayısı bulunamadı, 0 kullanılıyor');
+          }
+          
+          console.log('📊 İstatistik kaydediliyor - Final erteleme sayısı:', finalSnoozeCount);
+          
+          await saveDailyStatistics({
+            totalDuration: totalSittingDuration,
+            snoozeCount: finalSnoozeCount,
+          });
+          
+          console.log('📊 İstatistikler kaydedildi - Erteleme sayısı:', finalSnoozeCount);
+          
+          // 🔑 İstatistikler kaydedildikten SONRA timerSnoozeCount'u sil
+          await AsyncStorage.removeItem('timerSnoozeCount');
+          console.log('🗑️ timerSnoozeCount AsyncStorage\'dan silindi (istatistikler kaydedildikten sonra)');
+          
+          // İstatistikler kaydedildikten sonra refresh key'i artır (ekran açıksa yenilenecek)
+          setStatisticsRefreshKey(prev => prev + 1);
+        } catch (err) {
+          console.error('İstatistik kaydetme hatası:', err);
+        }
+      })();
     }
     
     // ARKA PLANDA: Timer durdur (UI'ı bloklamadan)
@@ -1671,6 +1737,7 @@ export default function App() {
   };
 
   const handleSnooze = () => {
+    console.log('🔔 handleSnooze çağrıldı - Mevcut erteleme sayısı:', snoozeCount, 'Max:', maxSnoozes);
     if (snoozeCount < maxSnoozes) {
       // HEMEN: Titreşimi durdur
       if (Platform.OS === 'android') {
@@ -1689,12 +1756,15 @@ export default function App() {
       });
       
       const newSnoozeCount = snoozeCount + 1;
+      console.log('🔔 Erteleme yapılıyor - Mevcut:', snoozeCount, 'Yeni:', newSnoozeCount);
+      
       const seconds = Math.floor(snoozeDuration * 60);
       const startTime = Date.now();
       
       // Toplam oturma süresine erteleme süresini ekle
       const newTotalSittingDuration = (totalSittingDuration || 0) + snoozeDuration;
       
+      // 🔑 State'i hemen güncelle (handleStandUp'ta doğru değer kullanılsın)
       setSnoozeCount(newSnoozeCount);
       setTimeLeft(seconds);
     setIsRunning(true);
@@ -1715,6 +1785,7 @@ export default function App() {
           await AsyncStorage.setItem('timerInitialDuration', seconds.toString());
           await AsyncStorage.setItem('timerIsRunning', 'true');
           await AsyncStorage.setItem('timerSnoozeCount', newSnoozeCount.toString());
+          console.log('💾 Erteleme sayısı AsyncStorage\'a kaydedildi:', newSnoozeCount);
           if (firstSittingDuration !== null) {
             await AsyncStorage.setItem('firstSittingDuration', firstSittingDuration.toString());
           }
