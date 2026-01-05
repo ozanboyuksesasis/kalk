@@ -34,8 +34,6 @@ const SettingsScreen = ({
     setAlarmSound(initialAlarmSound);
   }, [initialSnoozeDuration, initialMaxSnoozes, initialEnableVibration, initialEnableSound, initialAlarmSound]);
   
-  const [showSoundPicker, setShowSoundPicker] = useState(false);
-  
   // Kaydet butonuna basıldığında tüm değişiklikleri parent'a gönder
   const handleSave = () => {
     if (onSave) {

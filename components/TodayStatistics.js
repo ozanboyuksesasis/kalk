@@ -7,6 +7,7 @@ import { formatCountdown } from '../utils/formatTime';
 const TodayStatistics = ({ refreshKey }) => {
   const { t } = useTranslation();
   const [dailyStats, setDailyStats] = useState(null); // null = henüz yüklenmedi
+  const [yesterdayStats, setYesterdayStats] = useState(null); // Dünkü veriler
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -30,6 +31,33 @@ const TodayStatistics = ({ refreshKey }) => {
           sessions: [],
         });
       }
+
+      // Dünkü verileri yükle
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayDate = yesterday.toISOString().split('T')[0];
+      const yesterdayStatsKey = `dailyStats_${yesterdayDate}`;
+      const yesterdayStatsData = await AsyncStorage.getItem(yesterdayStatsKey);
+      
+      if (yesterdayStatsData) {
+        const parsedYesterday = JSON.parse(yesterdayStatsData);
+        console.log('📊 Dünkü veri yüklendi:', {
+          date: yesterdayDate,
+          totalSittingTime: parsedYesterday.totalSittingTime,
+        });
+        setYesterdayStats(parsedYesterday);
+      } else {
+        console.log('📊 Dünkü veri bulunamadı:', yesterdayDate);
+        setYesterdayStats(null);
+      }
+      
+      // Debug: Bugünkü ve dünkü verileri logla
+      if (stats) {
+        const todayData = JSON.parse(stats);
+        console.log('📊 Bugünkü veri:', {
+          totalSittingTime: todayData.totalSittingTime,
+        });
+      }
     } catch (error) {
       console.error('İstatistikler yüklenemedi:', error);
       setDailyStats({
@@ -38,6 +66,7 @@ const TodayStatistics = ({ refreshKey }) => {
         snoozeCount: 0,
         sessions: [],
       });
+      setYesterdayStats(null);
     } finally {
       setIsLoading(false);
     }
@@ -82,6 +111,44 @@ const TodayStatistics = ({ refreshKey }) => {
           </View>
         </View>
       </View>
+
+      {/* Düne Göre Karşılaştırma - Sadece dünkü veri varsa göster */}
+      {dailyStats && yesterdayStats !== null && (
+        <View style={styles.comparisonCard}>
+          <Text style={styles.comparisonTitle}>{t('statistics.comparedToYesterday')}</Text>
+          {(() => {
+            const todayMinutes = Math.floor(dailyStats.totalSittingTime || 0);
+            const yesterdayMinutes = Math.floor(yesterdayStats?.totalSittingTime || 0);
+            const difference = todayMinutes - yesterdayMinutes;
+            
+            console.log('📊 Karşılaştırma:', {
+              today: todayMinutes,
+              yesterday: yesterdayMinutes,
+              difference: difference,
+            });
+            
+            if (difference > 0) {
+              return (
+                <Text style={[styles.comparisonText, styles.comparisonMore]}>
+                  📈 {t('statistics.moreThanYesterday', { minutes: difference })}
+                </Text>
+              );
+            } else if (difference < 0) {
+              return (
+                <Text style={[styles.comparisonText, styles.comparisonLess]}>
+                  📉 {t('statistics.lessThanYesterday', { minutes: Math.abs(difference) })}
+                </Text>
+              );
+            } else {
+              return (
+                <Text style={[styles.comparisonText, styles.comparisonSame]}>
+                  ➡️ {t('statistics.sameAsYesterday')}
+                </Text>
+              );
+            }
+          })()}
+        </View>
+      )}
 
       {(!dailyStats?.totalSittingTime || dailyStats.totalSittingTime <= 0) && (
         <View style={styles.emptyStatsContainer}>
@@ -152,6 +219,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  comparisonCard: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  comparisonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#E65100',
+    marginBottom: 8,
+  },
+  comparisonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  comparisonMore: {
+    color: '#D32F2F',
+  },
+  comparisonLess: {
+    color: '#388E3C',
+  },
+  comparisonSame: {
+    color: '#1976D2',
+  },
+  comparisonNoData: {
+    color: '#757575',
+    fontStyle: 'italic',
   },
 });
 
