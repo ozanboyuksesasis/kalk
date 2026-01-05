@@ -1,0 +1,7 @@
+/* 
+  iOS App Name Localization - English
+  This file is used when the device language is English
+*/
+CFBundleDisplayName = "Stand Up";
+CFBundleName = "Stand Up";
+

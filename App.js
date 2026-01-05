@@ -17,6 +17,8 @@ import * as Notifications from 'expo-notifications';
 import notifee from '@notifee/react-native';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import './i18n'; // i18n yapılandırmasını yükle
+import { useTranslation } from 'react-i18next';
 import { getHealthMessage } from './utils/healthMessages';
 import {
   createAlarmChannel,
@@ -90,6 +92,7 @@ Notifications.setNotificationHandler({
 
 
 export default function App() {
+  const { t } = useTranslation(); // i18n hook'u
   const [duration, setDuration] = useState(0); // dakika cinsinden (başlangıç 0)
   const [timeLeft, setTimeLeft] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -157,13 +160,13 @@ export default function App() {
       }
     });
     
-    // Android için notification channel'ları oluştur (dinamik - availableAlarmSounds'a göre)
-    // Notifee ile birlikte expo-notifications da kullanılabilir (geriye dönük uyumluluk)
-    if (Platform.OS === 'android') {
-      // Her alarm sesi için channel oluştur
-      availableAlarmSounds.forEach(sound => {
-        Notifications.setNotificationChannelAsync(sound.id, {
-          name: `Kalk Hatırlatıcı - ${sound.label}`,
+            // Android için notification channel'ları oluştur (dinamik - availableAlarmSounds'a göre)
+            // Notifee ile birlikte expo-notifications da kullanılabilir (geriye dönük uyumluluk)
+            if (Platform.OS === 'android') {
+              // Her alarm sesi için channel oluştur
+              availableAlarmSounds.forEach(sound => {
+                Notifications.setNotificationChannelAsync(sound.id, {
+                  name: `${t('app.name')} - ${sound.label}`,
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 500, 200, 500, 200, 500], // Standart titreşim pattern'i
           lightColor: '#FF231F7C',
@@ -574,16 +577,16 @@ export default function App() {
   // Tüm verileri temizle (test için)
   const clearAllData = async (setLoading) => {
     showAlert(
-      'Verileri Temizle',
-      'Tüm istatistik verileri ve timer durumları silinecek. Bu işlem geri alınamaz. Emin misiniz?',
+      t('settings.clearData'),
+      t('settings.clearDataConfirm'),
       [
         {
-          text: 'İptal',
+          text: t('common.cancel'),
           style: 'cancel',
           onPress: () => {},
         },
         {
-          text: 'Temizle',
+          text: t('settings.clearButton'),
           style: 'destructive',
           onPress: async () => {
             // Loading'i başlat
@@ -620,9 +623,9 @@ export default function App() {
               // Loading'i durdur
               if (setLoading) setLoading(false);
               
-              showAlert('Başarılı', 'Tüm veriler temizlendi.', [
+              showAlert(t('settings.clearDataSuccessTitle'), t('settings.clearDataSuccess'), [
                 {
-                  text: 'Tamam',
+                  text: t('common.ok'),
                   onPress: () => {},
                 },
               ]);
@@ -632,9 +635,9 @@ export default function App() {
               // Loading'i durdur
               if (setLoading) setLoading(false);
               
-              showAlert('Hata', 'Veriler temizlenirken bir hata oluştu.', [
+              showAlert(t('settings.clearDataErrorTitle'), t('settings.clearDataError'), [
                 {
-                  text: 'Tamam',
+                  text: t('common.ok'),
                   onPress: () => {},
                 },
               ]);
@@ -648,14 +651,16 @@ export default function App() {
   // Bildirim izinlerini ayarlar ekranından yönetmek için yardımcı fonksiyonlar
   const checkNotificationPermissions = async () => {
     try {
-      const settings = await Notifications.getPermissionsAsync();
-      setNotificationStatus(settings?.status || null);
+      const settings = await notifee.getNotificationSettings();
+      const status = settings.authorizationStatus === 1 ? 'granted' : 'denied';
+      setNotificationStatus(status);
+      const statusText = status === 'granted' ? t('settings.granted') : t('settings.denied');
       showAlert(
-        'Bildirim izni',
-        `Şu anki bildirim izni durumu: ${settings?.status || 'bilinmiyor'}.`,
+        t('settings.notificationPermission'),
+        t('notifications.permissionStatus', { status: statusText }),
         [
           {
-            text: 'Tamam',
+            text: t('common.ok'),
             onPress: () => {},
           },
         ]
@@ -663,11 +668,11 @@ export default function App() {
     } catch (e) {
       console.error('Bildirim izni durumu alınamadı:', e);
       showAlert(
-        'Bildirim izni',
-        'Bildirim izni durumu alınamadı. Lütfen daha sonra tekrar dene.',
+        t('settings.notificationPermission'),
+        t('notifications.permissionError'),
         [
           {
-            text: 'Tamam',
+            text: t('common.ok'),
             onPress: () => {},
           },
         ]
@@ -677,26 +682,27 @@ export default function App() {
 
   const requestNotificationPermissionsAgain = async () => {
     try {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const settings = await notifee.requestPermission();
+      const status = settings.authorizationStatus === 1 ? 'granted' : 'denied';
       setNotificationStatus(status);
       if (status === 'granted') {
         showAlert(
-          'Bildirim izni',
-          'Bildirim izni verildi. Arka planda kalkma uyarıları gönderilebilecek. ✅',
+          t('settings.notificationPermission'),
+          t('notifications.permissionGranted'),
           [
             {
-              text: 'Tamam',
+              text: t('common.ok'),
               onPress: () => {},
             },
           ]
         );
       } else {
         showAlert(
-          'Bildirim izni',
-          'Bildirim izni verilemedi. İstersen cihaz ayarlarından daha sonra açabilirsin.',
+          t('settings.notificationPermission'),
+          t('notifications.permissionDenied'),
           [
             {
-              text: 'Tamam',
+              text: t('common.ok'),
               onPress: () => {},
             },
           ]
@@ -705,11 +711,11 @@ export default function App() {
     } catch (e) {
       console.error('Bildirim izni yeniden istenirken hata:', e);
       showAlert(
-        'Bildirim izni',
-        'Bildirim izni istenirken bir hata oluştu. Lütfen daha sonra tekrar dene.',
+        t('settings.notificationPermission'),
+        t('notifications.permissionRequestError'),
         [
           {
-            text: 'Tamam',
+            text: t('common.ok'),
             onPress: () => {},
           },
         ]
@@ -912,8 +918,8 @@ export default function App() {
               const savedTotal = await AsyncStorage.getItem('totalSittingDuration');
               
               await scheduleAlarmNotification(triggerDate, {
-                title: 'Kalkma Zamanı! 🚶',
-                body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+                title: t('notifications.title'),
+                body: t('notifications.body'),
                 data: {
                   snoozeCount: savedSnoozeCount ? parseInt(savedSnoozeCount) : 0,
                   firstSittingDuration: savedFirst ? parseFloat(savedFirst) : null,
@@ -1509,8 +1515,8 @@ export default function App() {
     const channelId = alarmSound;
     
     const baseContent = {
-      title: 'Kalkma Zamanı! 🚶',
-      body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+      title: t('notifications.title'),
+      body: t('notifications.body'),
       sound: enableSound, // Ayarlardan gelen ses ayarı
       priority: Notifications.AndroidNotificationPriority.MAX,
       channelId: channelId, // Seçilen ses tipine göre channel
@@ -1593,8 +1599,8 @@ export default function App() {
             console.log(`🔔 Bildirim zamanı: ${triggerDate.toLocaleTimeString('tr-TR')} (${timeUntilAlarm} saniye sonra, tam ${exactSeconds} saniye)`);
             
             await scheduleAlarmNotification(triggerDate, {
-              title: 'Kalkma Zamanı! 🚶',
-              body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+              title: t('notifications.title'),
+              body: t('notifications.body'),
               data: {
                 snoozeCount: 0,
                 firstSittingDuration: duration,
@@ -1816,8 +1822,8 @@ export default function App() {
               const triggerTimestamp = now + (exactSeconds * 1000); // Tam saniye hassasiyeti
               const triggerDate = new Date(triggerTimestamp);
               await scheduleAlarmNotification(triggerDate, {
-                title: 'Kalkma Zamanı! 🚶',
-                body: 'Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!',
+                title: t('notifications.title'),
+                body: t('notifications.body'),
                 data: {
                   snoozeCount: newSnoozeCount,
                   firstSittingDuration: firstSittingDuration || duration,
@@ -1915,7 +1921,7 @@ export default function App() {
     ],
   };
 
-  const healthInfo = getHealthMessage(duration);
+  const healthInfo = getHealthMessage(duration, t);
   // displayTime: Eğer geri sayım varsa saniyeyi dakikaya çevir, yoksa duration'ı kullan
   const displayTime = (timeLeft !== null && timeLeft !== undefined && !isNaN(timeLeft))
     ? timeLeft / 60  // Saniyeyi dakikaya çevir (0.5, 1.5 gibi ondalıklı olabilir)
@@ -1986,8 +1992,31 @@ export default function App() {
             await AsyncStorage.setItem('enableSound', settings.enableSound.toString());
             await AsyncStorage.setItem('alarmSound', settings.alarmSound);
             console.log('✅ Ayarlar AsyncStorage\'a kaydedildi:', settings.alarmSound);
+            
+            // Kaydetme başarılı mesajı göster
+            showAlert(
+              t('common.ok'),
+              t('settings.saveSuccess'),
+              [
+                {
+                  text: t('common.ok'),
+                  onPress: () => {},
+                },
+              ]
+            );
           } catch (error) {
             console.error('Ayarlar kaydedilemedi:', error);
+            // Hata mesajı göster
+            showAlert(
+              t('settings.clearDataErrorTitle'),
+              t('settings.clearDataError'),
+              [
+                {
+                  text: t('common.ok'),
+                  onPress: () => {},
+                },
+              ]
+            );
           }
           
           // SONRA REF'leri güncelle
@@ -2002,8 +2031,8 @@ export default function App() {
           setEnableSound(settings.enableSound);
           setAlarmSound(settings.alarmSound);
           
-          setShowMenu(false);
-          setShowSettings(false);
+          // Sayfa kapanmasın - setShowSettings(false) kaldırıldı
+          // setShowMenu(false); // Menü de kapanmasın
         }}
         onNotificationToggle={async (value) => {
           if (value) {

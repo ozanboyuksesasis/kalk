@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import TodayStatistics from './TodayStatistics';
 import AllTimeStatistics from './AllTimeStatistics';
 
@@ -9,6 +10,7 @@ const StatisticsScreen = ({
   statisticsView, // Sekme seçimi ('today' veya 'all')
   setStatisticsView, // Sekme seçimini değiştirme fonksiyonu
 }) => {
+  const { t } = useTranslation();
   // Eğer statisticsView undefined ise veya geçersiz bir değer ise 'today' olarak ayarla
   const currentView = statisticsView === 'today' || statisticsView === 'all' ? statisticsView : 'today';
   return (
@@ -25,9 +27,9 @@ const StatisticsScreen = ({
             style={styles.backButtonSmall}
             onPress={onBack}
           >
-            <Text style={styles.backButtonSmallText}>◀ Geri</Text>
+            <Text style={styles.backButtonSmallText}>{t('common.back')}</Text>
           </TouchableOpacity>
-          <Text style={styles.statisticsTitle}>İstatistikler</Text>
+          <Text style={styles.statisticsTitle}>{t('statistics.title')}</Text>
           <View style={{ width: 60 }} />
         </View>
 
@@ -47,7 +49,7 @@ const StatisticsScreen = ({
                 fontWeight: currentView === 'today' ? 'bold' : '600',
               },
             ]}>
-              Bugün
+              {t('statistics.today')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -64,7 +66,7 @@ const StatisticsScreen = ({
                 fontWeight: currentView === 'all' ? 'bold' : '600',
               },
             ]}>
-              Tüm Zamanlar
+              {t('statistics.allTime')}
             </Text>
           </TouchableOpacity>
         </View>

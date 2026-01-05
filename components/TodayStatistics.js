@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatCountdown } from '../utils/formatTime';
 
 const TodayStatistics = ({ refreshKey }) => {
+  const { t } = useTranslation();
   const [dailyStats, setDailyStats] = useState(null); // null = henüz yüklenmedi
   const [isLoading, setIsLoading] = useState(true);
 
@@ -55,9 +57,9 @@ const TodayStatistics = ({ refreshKey }) => {
             <Text style={styles.todayStatEmoji}>⏱️</Text>
             <View style={styles.todayStatTextContainer}>
               <Text style={styles.todayStatValue}>
-                {String(formatCountdown(Math.floor((dailyStats?.totalSittingTime || 0) * 60)) || '0 sn') || '0 sn'}
+                {String(formatCountdown(Math.floor((dailyStats?.totalSittingTime || 0) * 60), t) || `0 ${t('timer.secondsShort')}`) || `0 ${t('timer.secondsShort')}`}
               </Text>
-              <Text style={styles.todayStatLabel}>oturdun</Text>
+              <Text style={styles.todayStatLabel}>{t('statistics.sittingTime')}</Text>
             </View>
           </View>
           <View style={styles.todayStatItem}>
@@ -66,7 +68,7 @@ const TodayStatistics = ({ refreshKey }) => {
               <Text style={styles.todayStatValue}>
                 {String(dailyStats?.alarmCount || 0)}
               </Text>
-              <Text style={styles.todayStatLabel}>alarm kurdun</Text>
+              <Text style={styles.todayStatLabel}>{t('statistics.alarmSet')}</Text>
             </View>
           </View>
           <View style={styles.todayStatItem}>
@@ -75,7 +77,7 @@ const TodayStatistics = ({ refreshKey }) => {
               <Text style={styles.todayStatValue}>
                 {String(dailyStats?.snoozeCount || 0)}
               </Text>
-              <Text style={styles.todayStatLabel}>alarm erteledin</Text>
+              <Text style={styles.todayStatLabel}>{t('statistics.alarmSnoozed')}</Text>
             </View>
           </View>
         </View>
@@ -83,9 +85,9 @@ const TodayStatistics = ({ refreshKey }) => {
 
       {(!dailyStats?.totalSittingTime || dailyStats.totalSittingTime <= 0) && (
         <View style={styles.emptyStatsContainer}>
-          <Text style={styles.emptyStatsText}>Henüz istatistik yok</Text>
+          <Text style={styles.emptyStatsText}>{t('statistics.noData')}</Text>
           <Text style={styles.emptyStatsSubtext}>
-            Alarm kurup "Kalktım" dediğinizde istatistikler burada görünecek
+            {t('statistics.noDataSubtext')}
           </Text>
         </View>
       )}

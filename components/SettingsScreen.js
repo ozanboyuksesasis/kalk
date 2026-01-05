@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, ActivityIndicator } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const SettingsScreen = ({
   snoozeDuration: initialSnoozeDuration,
@@ -22,6 +23,7 @@ const SettingsScreen = ({
   const [enableSound, setEnableSound] = useState(initialEnableSound);
   const [alarmSound, setAlarmSound] = useState(initialAlarmSound);
   const [isClearing, setIsClearing] = useState(false);
+  const { t } = useTranslation();
   
   // Props değiştiğinde local state'i güncelle (ekran yeniden açıldığında)
   useEffect(() => {
@@ -70,19 +72,19 @@ const SettingsScreen = ({
             style={styles.backButtonSmall}
             onPress={onBack}
           >
-            <Text style={styles.backButtonSmallText}>◀ Geri</Text>
+            <Text style={styles.backButtonSmallText}>{t('common.back')}</Text>
           </TouchableOpacity>
-          <Text style={styles.settingsTitle}>Ayarlar</Text>
+          <Text style={styles.settingsTitle}>{t('settings.title')}</Text>
           <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSave}
           >
-            <Text style={styles.saveButtonText}>✓ Kaydet</Text>
+            <Text style={styles.saveButtonText}>{t('common.save')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Erteleme Süresi (dakika)</Text>
+          <Text style={styles.settingLabel}>{t('settings.snoozeDuration')}</Text>
           <View style={styles.settingControls}>
             <TouchableOpacity
               style={styles.settingButton}
@@ -90,7 +92,7 @@ const SettingsScreen = ({
             >
               <Text style={styles.settingButtonText}>-5</Text>
             </TouchableOpacity>
-            <Text style={styles.settingValue}>{String(snoozeDuration || 0)} dk</Text>
+            <Text style={styles.settingValue}>{String(snoozeDuration || 0)} {t('timer.minutes')}</Text>
             <TouchableOpacity
               style={styles.settingButton}
               onPress={() => setSnoozeDuration(Math.min(30, snoozeDuration + 5))}
@@ -101,7 +103,7 @@ const SettingsScreen = ({
         </View>
 
         <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Maksimum Erteleme Sayısı</Text>
+          <Text style={styles.settingLabel}>{t('settings.maxSnoozes')}</Text>
           <View style={styles.settingControls}>
             <TouchableOpacity
               style={styles.settingButton}
@@ -109,7 +111,7 @@ const SettingsScreen = ({
             >
               <Text style={styles.settingButtonText}>-</Text>
             </TouchableOpacity>
-            <Text style={styles.settingValue}>{String(maxSnoozes || 0)} kez</Text>
+            <Text style={styles.settingValue}>{String(maxSnoozes || 0)} {t('settings.times')}</Text>
             <TouchableOpacity
               style={styles.settingButton}
               onPress={() => setMaxSnoozes(Math.min(10, maxSnoozes + 1))}
@@ -121,9 +123,9 @@ const SettingsScreen = ({
 
         {/* İzinler listesi */}
         <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>İzinler</Text>
+          <Text style={styles.settingLabel}>{t('settings.permissions')}</Text>
           <View style={styles.permissionRow}>
-            <Text style={styles.permissionName}>Bildirim izni</Text>
+            <Text style={styles.permissionName}>{t('settings.notificationPermission')}</Text>
             <View style={styles.permissionRight}>
               <Text
                 style={
@@ -132,7 +134,7 @@ const SettingsScreen = ({
                     : styles.permissionStatusDenied
                 }
               >
-                {notificationStatus === 'granted' ? 'Açık' : 'Kapalı'}
+                {notificationStatus === 'granted' ? t('settings.granted') : t('settings.denied')}
               </Text>
               <Switch
                 value={notificationStatus === 'granted'}
@@ -144,11 +146,11 @@ const SettingsScreen = ({
 
         {/* Alarm Ayarları */}
         <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Alarm Ayarları</Text>
+          <Text style={styles.settingLabel}>{t('settings.alarmSettings')}</Text>
           
           {/* Titreşim */}
           <View style={styles.permissionRow}>
-            <Text style={styles.permissionName}>📳 Titreşim</Text>
+            <Text style={styles.permissionName}>{t('settings.vibration')}</Text>
             <Switch
               value={enableVibration}
               onValueChange={setEnableVibration}
@@ -157,7 +159,7 @@ const SettingsScreen = ({
           
           {/* Ses */}
           <View style={[styles.permissionRow, { marginTop: 15 }]}>
-            <Text style={styles.permissionName}>🔊 Ses</Text>
+            <Text style={styles.permissionName}>{t('settings.sound')}</Text>
             <Switch
               value={enableSound}
               onValueChange={setEnableSound}
@@ -167,7 +169,7 @@ const SettingsScreen = ({
           {/* Alarm Sesi Seçimi */}
           {enableSound && (
             <View style={styles.soundPickerContainer}>
-              <Text style={styles.soundPickerLabel}>Alarm Sesi:</Text>
+              <Text style={styles.soundPickerLabel}>{t('settings.alarmSound')}</Text>
               <View style={styles.soundPickerButtons}>
                 {alarmSounds.map((sound) => (
                   <TouchableOpacity
@@ -201,7 +203,7 @@ const SettingsScreen = ({
 
         {/* Verileri Temizle Butonu */}
         <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Veri Yönetimi</Text>
+          <Text style={styles.settingLabel}>{t('settings.dataManagement')}</Text>
           <TouchableOpacity
             style={[styles.clearDataButton, isClearing && styles.clearDataButtonDisabled]}
             onPress={() => {
@@ -214,14 +216,14 @@ const SettingsScreen = ({
             {isClearing ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.clearDataButtonText}>Temizleniyor...</Text>
+                <Text style={styles.clearDataButtonText}>{t('settings.clearing')}</Text>
               </View>
             ) : (
-              <Text style={styles.clearDataButtonText}>🗑️ Verileri Temizle</Text>
+              <Text style={styles.clearDataButtonText}>{t('settings.clearData')}</Text>
             )}
           </TouchableOpacity>
           <Text style={styles.clearDataDescription}>
-            Tüm istatistik verileri ve timer durumları silinir
+            {t('settings.clearDataDescription')}
           </Text>
         </View>
       </View>

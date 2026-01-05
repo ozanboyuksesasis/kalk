@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform, StatusBar, Animated } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
 
 const { width } = Dimensions.get('window');
@@ -11,6 +12,7 @@ const Menu = ({
   onProfilePress,
   onSettingsPress 
 }) => {
+  const { t } = useTranslation();
   const slideAnim = React.useRef(new Animated.Value(width)).current;
   const overlayOpacity = React.useRef(new Animated.Value(0)).current;
 
@@ -79,7 +81,7 @@ const Menu = ({
         <View style={styles.menuHeader}>
           <View style={styles.menuTitleContainer}>
             <View style={styles.menuTitleAccent} />
-            <Text style={styles.menuTitle}>Menü</Text>
+            <Text style={styles.menuTitle}>{t('menu.title')}</Text>
           </View>
           <TouchableOpacity
             style={styles.menuCloseButton}
@@ -103,8 +105,8 @@ const Menu = ({
               <Text style={styles.menuItemIcon}>📈</Text>
             </View>
             <View style={styles.menuItemContent}>
-              <Text style={styles.menuItemText}>İstatistikler</Text>
-              <Text style={styles.menuItemSubtext}>Verilerinizi görüntüleyin</Text>
+              <Text style={styles.menuItemText}>{t('menu.statistics')}</Text>
+              <Text style={styles.menuItemSubtext}>{t('menu.statisticsSubtext')}</Text>
             </View>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
@@ -120,8 +122,8 @@ const Menu = ({
               <Text style={styles.menuItemIcon}>👤</Text>
             </View>
             <View style={styles.menuItemContent}>
-              <Text style={styles.menuItemText}>Profil</Text>
-              <Text style={styles.menuItemSubtext}>Kişisel bilgilerinizi düzenleyin</Text>
+              <Text style={styles.menuItemText}>{t('menu.profile')}</Text>
+              <Text style={styles.menuItemSubtext}>{t('menu.profileSubtext')}</Text>
             </View>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
@@ -137,14 +139,14 @@ const Menu = ({
               <Text style={styles.menuItemIcon}>⚙️</Text>
             </View>
             <View style={styles.menuItemContent}>
-              <Text style={styles.menuItemText}>Ayarlar</Text>
-              <Text style={styles.menuItemSubtext}>Uygulama ayarlarını düzenleyin</Text>
+              <Text style={styles.menuItemText}>{t('menu.settings')}</Text>
+              <Text style={styles.menuItemSubtext}>{t('menu.settingsSubtext')}</Text>
             </View>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.menuFooter}>
-          <Text style={styles.menuFooterText}>Kalk Hatırlatıcı v1.0</Text>
+          <Text style={styles.menuFooterText}>{t('menu.version')}</Text>
         </View>
       </Animated.View>
     </>

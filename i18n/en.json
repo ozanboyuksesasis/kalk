@@ -1,0 +1,154 @@
+{
+  "common": {
+    "back": "◀ Back",
+    "save": "✓ Save",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "timer": {
+    "setTime": "Set stand-up time",
+    "start": "Start",
+    "stop": "Stop",
+    "minutes": "minutes",
+    "seconds": "seconds",
+    "isRunning": "Running",
+    "timeLeft": "Time left",
+    "afterStandUp": "until stand up",
+    "secondsShort": "s",
+    "minutesShort": "m",
+    "hoursShort": "h",
+    "increase10": "+10s",
+    "decrease10": "-10s",
+    "maximum": "Maximum"
+  },
+  "alarm": {
+    "title": "Time to Stand Up! 🚶",
+    "subtitle": "You've been sitting for too long\nGet up and walk a bit",
+    "sittingFor": "sitting",
+    "standUp": "I'm Up",
+    "snooze": "Snooze",
+    "snoozeCount": "Snooze count",
+    "maxSnoozesReached": "Maximum snooze count reached"
+  },
+  "settings": {
+    "title": "Settings",
+    "snoozeDuration": "Snooze Duration (minutes)",
+    "maxSnoozes": "Maximum Snooze Count",
+    "times": "times",
+    "permissions": "Permissions",
+    "notificationPermission": "Notification permission",
+    "granted": "Granted",
+    "denied": "Denied",
+    "alarmSettings": "Alarm Settings",
+    "vibration": "📳 Vibration",
+    "sound": "🔊 Sound",
+    "alarmSound": "Alarm Sound:",
+    "dataManagement": "Data Management",
+    "clearData": "🗑️ Clear Data",
+    "clearButton": "Clear",
+    "clearing": "Clearing...",
+    "clearDataDescription": "All statistics data and timer states will be deleted",
+    "clearDataConfirm": "All statistics data and timer states will be deleted. This action cannot be undone. Are you sure?",
+    "clearDataSuccessTitle": "Success",
+    "clearDataSuccess": "All data cleared.",
+    "clearDataErrorTitle": "Error",
+    "clearDataError": "An error occurred while clearing data.",
+    "saveSuccess": "Settings saved"
+  },
+  "menu": {
+    "title": "Menu",
+    "statistics": "Statistics",
+    "statisticsSubtext": "View your data",
+    "profile": "Profile",
+    "profileSubtext": "Edit your personal information",
+    "settings": "Settings",
+    "settingsSubtext": "Edit app settings",
+    "version": "Stand Up Reminder v1.0"
+  },
+  "gender": {
+    "title": "Select Gender",
+    "subtitle": "For a personalized experience",
+    "male": "Male",
+    "female": "Female"
+  },
+  "notifications": {
+    "title": "Time to Stand Up! 🚶",
+    "body": "You've been sitting for too long, get up and walk a bit!",
+    "permissionRequired": "Notification permission required",
+    "permissionMessage": "We need notification permission to send stand-up reminders in the background. Please grant permission.",
+    "permissionGranted": "Notification permission granted. Stand-up reminders can be sent in the background. ✅",
+    "permissionDenied": "Notification permission denied. You can enable it later from device settings if you wish.",
+    "permissionStatus": "Current notification permission status: {{status}}.",
+    "permissionError": "Could not get notification permission status. Please try again later.",
+    "permissionRequestError": "An error occurred while requesting notification permission. Please try again later.",
+    "openSettings": "Could not open system settings. Please manually open the app from device settings and update permissions."
+  },
+  "health": {
+    "notSet": "Time not set",
+    "excellent": "Great! The healthiest sitting duration selected",
+    "good": "Musculoskeletal micro-strains begin, blood circulation slows. A short stretch would be good.",
+    "ok": "You've selected a healthy duration. Don't forget to move.",
+    "warning": "Risk of increased load on back, neck and shoulder muscles.",
+    "caution": "Risk of increased load on back and neck muscles. Be careful.",
+    "danger": "Risk of posture problems, increased risk of herniated disc, metabolism slows.",
+    "highRisk": "Blood flow seriously decreases, load on spinal discs increases, risk of neck flattening.",
+    "critical": "Risk of cardiovascular diseases, Type 2 diabetes risk, chronic back pain, varicose veins and clot risk. Not medically recommended."
+  },
+  "statistics": {
+    "title": "Statistics",
+    "today": "Today",
+    "allTime": "All Time",
+    "totalSittingTime": "Total Sitting Time",
+    "alarmCount": "Alarm Count",
+    "snoozeCount": "Snooze Count",
+    "noData": "No data yet",
+    "noDataSubtext": "Statistics will appear here when you set an alarm and tap \"I'm Up\"",
+    "minutes": "minutes",
+    "hours": "hours",
+    "sittingTime": "sitting",
+    "alarmSet": "alarms set",
+    "alarmSnoozed": "alarms snoozed",
+    "since": "since",
+    "sittingTimeTitle": "Sitting Time",
+    "chartHint": "💡 Tap points to see day details",
+    "loadingChart": "Loading chart...",
+    "loadingMore": "Loading more data...",
+    "duration": "Duration",
+    "sessions": "Sessions",
+    "dayNames": {
+      "sunday": "Sunday",
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday"
+    },
+    "monthNames": {
+      "january": "January",
+      "february": "February",
+      "march": "March",
+      "april": "April",
+      "may": "May",
+      "june": "June",
+      "july": "July",
+      "august": "August",
+      "september": "September",
+      "october": "October",
+      "november": "November",
+      "december": "December"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "gender": "Gender",
+    "male": "Male",
+    "female": "Female"
+  },
+  "app": {
+    "name": "Stand Up Reminder"
+  }
+}
+

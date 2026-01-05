@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const ProfileScreen = ({
   gender: initialGender,
@@ -7,6 +8,7 @@ const ProfileScreen = ({
   onGenderChange,
 }) => {
   const [gender, setGender] = useState(initialGender);
+  const { t } = useTranslation();
 
   // Props değiştiğinde local state'i güncelle
   useEffect(() => {
@@ -28,18 +30,18 @@ const ProfileScreen = ({
           onPress={onBack}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.backButtonText}>← Geri</Text>
+          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Profil</Text>
+        <Text style={styles.title}>{t('profile.title')}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
+        <Text style={styles.sectionTitle}>{t('profile.title')}</Text>
         
         <View style={styles.genderContainer}>
-          <Text style={styles.label}>Cinsiyet</Text>
-          <Text style={styles.subLabel}>Halka içindeki ikonunuzu seçin</Text>
+          <Text style={styles.label}>{t('profile.gender')}</Text>
+          <Text style={styles.subLabel}>{t('gender.subtitle')}</Text>
           
           <View style={styles.genderOptions}>
             <TouchableOpacity
@@ -54,7 +56,7 @@ const ProfileScreen = ({
                 styles.genderLabel,
                 gender === 'male' && styles.genderLabelSelected,
               ]}>
-                Erkek
+                {t('profile.male')}
               </Text>
               {gender === 'male' && (
                 <View style={styles.checkmark}>
@@ -75,7 +77,7 @@ const ProfileScreen = ({
                 styles.genderLabel,
                 gender === 'female' && styles.genderLabelSelected,
               ]}>
-                Kadın
+                {t('profile.female')}
               </Text>
               {gender === 'female' && (
                 <View style={styles.checkmark}>

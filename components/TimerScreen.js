@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Platform, Dimensions, TextInput } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { formatTime, formatCountdown } from '../utils/formatTime';
 import { getHealthMessage } from '../utils/healthMessages';
 import OvalTimerDial from './OvalTimerDial';
@@ -26,6 +27,7 @@ const TimerScreen = ({
   onStop,
 }) => {
   const scrollViewRef = useRef(null);
+  const { t } = useTranslation();
   
   // Manuel ayar için state (tamamen bağımsız)
   const [minutesInput, setMinutesInput] = useState('');
@@ -100,21 +102,21 @@ const TimerScreen = ({
             onPress={onDecrease}
             disabled={isRunning || isAlarm}
           >
-            <Text style={styles.rotateButtonText}>-10sn</Text>
+            <Text style={styles.rotateButtonText}>{t('timer.decrease10')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.rotateButton}
             onPress={onIncrease}
             disabled={isRunning || isAlarm}
           >
-            <Text style={styles.rotateButtonText}>+10sn</Text>
+            <Text style={styles.rotateButtonText}>{t('timer.increase10')}</Text>
           </TouchableOpacity>
         </View>
         
         {/* Manuel Ayar Alanı (Tamamen Bağımsız) */}
         {!isRunning && !isAlarm && (
           <View style={styles.manualInputContainer}>
-            <Text style={styles.manualInputLabel}>Manuel Ayar</Text>
+            <Text style={styles.manualInputLabel}>{t('timer.setTime')}</Text>
             <View style={styles.manualInputRow}>
               <TextInput
                 style={styles.manualInput}
@@ -131,9 +133,9 @@ const TimerScreen = ({
                 maxLength={3}
                 editable={!isRunning && !isAlarm}
               />
-              <Text style={styles.inputLabel}>Dakika</Text>
+              <Text style={styles.inputLabel}>{t('timer.minutes')}</Text>
             </View>
-            <Text style={styles.manualInputHint}>Maksimum: 120 dakika (2 saat)</Text>
+            <Text style={styles.manualInputHint}>{t('timer.maximum')}: 120 {t('timer.minutes')} (2 {t('statistics.hours')})</Text>
           </View>
         )}
       </View>
@@ -142,16 +144,16 @@ const TimerScreen = ({
       <View style={styles.timeContainer}>
         {!isRunning ? (
           (duration === null || duration === undefined || isNaN(duration) || duration <= 0) ? (
-            <Text style={styles.timeText}>Kalkış zamanını ayarla</Text>
+            <Text style={styles.timeText}>{t('timer.setTime')}</Text>
           ) : (
             <Text style={styles.timeText}>
-              {String(formatTime(displayTime || 0) || '0 sn sonra kalk')}
+              {String(formatTime(displayTime || 0, t) || `0 ${t('timer.secondsShort')} ${t('timer.afterStandUp')}`)}
             </Text>
           )
         ) : (
           <>
             <Text style={styles.timeText}>
-              {String(formatTime((initialDuration !== null && initialDuration !== undefined && !isNaN(initialDuration) ? initialDuration : (duration !== null && duration !== undefined && !isNaN(duration) ? duration : 0)) || 0) || '0 sn sonra kalk')} ✓
+              {String(formatTime((initialDuration !== null && initialDuration !== undefined && !isNaN(initialDuration) ? initialDuration : (duration !== null && duration !== undefined && !isNaN(duration) ? duration : 0)) || 0, t) || `0 ${t('timer.secondsShort')} ${t('timer.afterStandUp')}`)} ✓
             </Text>
             {(() => {
               const totalSeconds = (timeLeft !== null && timeLeft !== undefined && !isNaN(timeLeft) ? timeLeft : 0) || 0;
@@ -160,14 +162,14 @@ const TimerScreen = ({
               const seconds = totalSeconds % 60;
               
               const timeParts = [];
-              if (hours > 0) timeParts.push(`${hours} saat`);
-              if (minutes > 0) timeParts.push(`${minutes} dk`);
+              if (hours > 0) timeParts.push(`${hours} ${t('timer.hoursShort')}`);
+              if (minutes > 0) timeParts.push(`${minutes} ${t('timer.minutesShort')}`);
               
               // Eğer sadece saniye varsa tek satırda göster
               if (hours === 0 && minutes === 0) {
                 return (
                   <Text style={styles.countdownText}>
-                    {String(seconds)} sn
+                    {String(seconds)} {t('timer.secondsShort')}
                   </Text>
                 );
               }
@@ -179,7 +181,7 @@ const TimerScreen = ({
                     {timeParts.join(' ')}
                   </Text>
                   <Text style={styles.countdownSecondsText}>
-                    {String(seconds)} sn
+                    {String(seconds)} {t('timer.secondsShort')}
                   </Text>
                 </>
               );
@@ -202,12 +204,12 @@ const TimerScreen = ({
         {!isRunning ? (
           duration > 0 ? (
             <TouchableOpacity style={styles.startButton} onPress={onStart}>
-              <Text style={styles.startButtonText}>Başlat</Text>
+              <Text style={styles.startButtonText}>{t('timer.start')}</Text>
             </TouchableOpacity>
           ) : null
         ) : (
           <TouchableOpacity style={styles.stopButton} onPress={onStop}>
-            <Text style={styles.stopButtonText}>Durdur</Text>
+            <Text style={styles.stopButtonText}>{t('timer.stop')}</Text>
           </TouchableOpacity>
         )}
       </View>

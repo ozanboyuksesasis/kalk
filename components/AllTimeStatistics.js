@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatCountdown } from '../utils/formatTime';
 
 const { width } = Dimensions.get('window');
 
 const AllTimeStatistics = ({ refreshKey }) => {
+  const { t } = useTranslation();
   const [allTimeStats, setAllTimeStats] = useState(null); // null = henüz yüklenmedi
   const [selectedDayInfo, setSelectedDayInfo] = useState(null);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
@@ -244,9 +246,9 @@ const AllTimeStatistics = ({ refreshKey }) => {
             <Text style={styles.todayStatEmoji}>⏱️</Text>
             <View style={styles.todayStatTextContainer}>
               <Text style={styles.todayStatValue}>
-                {String(formatCountdown(Math.floor((allTimeStats?.totalSittingTime || 0) * 60)) || '0 sn') || '0 sn'}
+                {String(formatCountdown(Math.floor((allTimeStats?.totalSittingTime || 0) * 60), t) || `0 ${t('timer.secondsShort')}`) || `0 ${t('timer.secondsShort')}`}
               </Text>
-              <Text style={styles.todayStatLabel}>oturdun</Text>
+              <Text style={styles.todayStatLabel}>{t('statistics.sittingTime')}</Text>
             </View>
           </View>
           <View style={styles.todayStatItem}>
@@ -255,7 +257,7 @@ const AllTimeStatistics = ({ refreshKey }) => {
               <Text style={styles.todayStatValue}>
                 {String(allTimeStats?.alarmCount || 0)}
               </Text>
-              <Text style={styles.todayStatLabel}>alarm kurdun</Text>
+              <Text style={styles.todayStatLabel}>{t('statistics.alarmSet')}</Text>
             </View>
           </View>
           <View style={styles.todayStatItem}>
@@ -264,7 +266,7 @@ const AllTimeStatistics = ({ refreshKey }) => {
               <Text style={styles.todayStatValue}>
                 {String(allTimeStats?.snoozeCount || 0)}
               </Text>
-              <Text style={styles.todayStatLabel}>alarm erteledin</Text>
+              <Text style={styles.todayStatLabel}>{t('statistics.alarmSnoozed')}</Text>
             </View>
           </View>
         </View>
@@ -275,13 +277,27 @@ const AllTimeStatistics = ({ refreshKey }) => {
         const firstKey = allStatsKeys[0];
         const firstDateStr = firstKey.replace('dailyStats_', '');
         const firstDate = new Date(firstDateStr + 'T00:00:00');
-        const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+        const dayNames = [
+          t('statistics.dayNames.sunday'),
+          t('statistics.dayNames.monday'),
+          t('statistics.dayNames.tuesday'),
+          t('statistics.dayNames.wednesday'),
+          t('statistics.dayNames.thursday'),
+          t('statistics.dayNames.friday'),
+          t('statistics.dayNames.saturday')
+        ];
         const dayName = dayNames[firstDate.getDay()];
-        const formattedDate = firstDateStr.split('-').reverse().join('.');
+        // Tarih formatını dil'e göre ayarla
+        const locale = t('statistics.dayNames.sunday') === 'Sunday' ? 'en-US' : 'tr-TR';
+        const formattedDate = new Date(firstDateStr + 'T00:00:00').toLocaleDateString(locale, { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        });
         return (
           <View style={styles.firstRecordInfo}>
             <Text style={styles.firstRecordText}>
-              {formattedDate} {dayName}'den bu yana
+              {formattedDate} {dayName} {t('statistics.since')}
             </Text>
           </View>
         );
@@ -290,17 +306,17 @@ const AllTimeStatistics = ({ refreshKey }) => {
       {/* Line Chart */}
       {isLoadingChart ? (
         <View style={styles.statCard}>
-          <Text style={styles.statCardTitle}>Oturma Süresi</Text>
+          <Text style={styles.statCardTitle}>{t('statistics.sittingTimeTitle')}</Text>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4CAF50" />
-            <Text style={styles.loadingText}>Grafik yükleniyor...</Text>
+            <Text style={styles.loadingText}>{t('statistics.loadingChart')}</Text>
           </View>
         </View>
       ) : allTimeStats?.dailyData && allTimeStats.dailyData.length > 0 ? (
         <View style={styles.statCard}>
-          <Text style={styles.statCardTitle}>Oturma Süresi</Text>
+          <Text style={styles.statCardTitle}>{t('statistics.sittingTimeTitle')}</Text>
           <View style={styles.chartInfo}>
-            <Text style={styles.chartInfoText}>💡 Noktalara tıklayarak gün detaylarını görebilirsiniz</Text>
+            <Text style={styles.chartInfoText}>{t('statistics.chartHint')}</Text>
           </View>
           <View style={styles.lineChartWrapper}>
             <View style={styles.lineChartYAxis}>
@@ -313,7 +329,7 @@ const AllTimeStatistics = ({ refreshKey }) => {
                 const value = Math.floor((maxTime / 4) * (4 - i));
                 return (
                   <Text key={i} style={styles.lineChartYLabel}>
-                    {String(value) + 'dk'}
+                    {String(value) + t('timer.minutesShort')}
                   </Text>
                 );
               })}
@@ -323,7 +339,7 @@ const AllTimeStatistics = ({ refreshKey }) => {
               {isLoadingMore && (
                 <View style={styles.lazyLoadingIndicator}>
                   <ActivityIndicator size="small" color="#4CAF50" />
-                  <Text style={styles.lazyLoadingText}>Daha fazla veri yükleniyor...</Text>
+                  <Text style={styles.lazyLoadingText}>{t('statistics.loadingMore')}</Text>
                 </View>
               )}
               <ScrollView
@@ -433,11 +449,14 @@ const AllTimeStatistics = ({ refreshKey }) => {
                               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                             >
                               <View style={[styles.lineChartPointDot, isSelected && styles.lineChartPointDotSelected]} />
-                              {index % 30 === 0 && (
-                                <Text style={styles.lineChartDateLabel}>
-                                  {String(new Date(day.date).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }) || '')}
-                                </Text>
-                              )}
+                              {index % 30 === 0 && (() => {
+                                const locale = t('statistics.dayNames.sunday') === 'Sunday' ? 'en-US' : 'tr-TR';
+                                return (
+                                  <Text style={styles.lineChartDateLabel}>
+                                    {String(new Date(day.date).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }) || '')}
+                                  </Text>
+                                );
+                              })()}
                             </TouchableOpacity>
                           </React.Fragment>
                         );
@@ -524,30 +543,36 @@ const AllTimeStatistics = ({ refreshKey }) => {
                     pointerEvents="none"
                   >
                     <Text style={styles.lineChartTooltipDay}>
-                      {String(new Date(day.date).toLocaleDateString('tr-TR', { weekday: 'long' }) || '')}
+                      {(() => {
+                        const locale = t('statistics.dayNames.sunday') === 'Sunday' ? 'en-US' : 'tr-TR';
+                        return String(new Date(day.date).toLocaleDateString(locale, { weekday: 'long' }) || '');
+                      })()}
                     </Text>
                     <Text style={styles.lineChartTooltipDate}>
-                      {String(new Date(day.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) || '')}
+                      {(() => {
+                        const locale = t('statistics.dayNames.sunday') === 'Sunday' ? 'en-US' : 'tr-TR';
+                        return String(new Date(day.date).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }) || '');
+                      })()}
                     </Text>
                     <View style={styles.tooltipDivider} />
                     <View style={styles.tooltipStatsRow}>
                       <View style={styles.tooltipStatItem}>
-                        <Text style={styles.tooltipStatLabel}>Süre</Text>
+                        <Text style={styles.tooltipStatLabel}>{t('statistics.duration')}</Text>
                         <Text style={styles.lineChartTooltipTime}>
                           {(() => {
                             const totalMinutes = Math.floor((day.totalTime || 0));
                             const hours = Math.floor(totalMinutes / 60);
                             const minutes = totalMinutes % 60;
                             if (hours > 0) {
-                              return String(`${hours} saat ${minutes} dk`);
+                              return String(`${hours}${t('timer.hoursShort')} ${minutes}${t('timer.minutesShort')}`);
                             }
-                            return String(`${minutes} dk`);
+                            return String(`${minutes}${t('timer.minutesShort')}`);
                           })()}
                         </Text>
                       </View>
                       {day.sessions && day.sessions.length > 0 && (
                         <View style={styles.tooltipStatItem}>
-                          <Text style={styles.tooltipStatLabel}>Oturma</Text>
+                          <Text style={styles.tooltipStatLabel}>{t('statistics.sessions')}</Text>
                           <Text style={styles.lineChartTooltipSessions}>
                             {String(day.sessions.length || 0)}
                           </Text>

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Platform, Vibration } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/formatTime';
 
 const { height } = Dimensions.get('window');
@@ -14,6 +15,7 @@ const AlarmScreen = ({
   stopAlarmSound, // Ses durdurma fonksiyonu
   intervalRef, // Interval referansı
 }) => {
+  const { t } = useTranslation();
   // Component mount olduğunda ses/titreşim durdurma garantisi
   useEffect(() => {
     return () => {
@@ -78,17 +80,16 @@ const AlarmScreen = ({
     >
       <View style={styles.alarmContainer}>
         <Text style={styles.alarmIcon}>🔔</Text>
-        <Text style={styles.alarmTitle}>Kalkma Zamanı!</Text>
+        <Text style={styles.alarmTitle}>{t('alarm.title')}</Text>
         <Text style={styles.alarmSubtitle}>
-          Uzun süredir oturuyorsunuz{'\n'}
-          Kalkıp biraz yürüyün
+          {t('alarm.subtitle')}
         </Text>
         
         {/* Özet Bilgiler */}
         {totalSittingDuration !== null && totalSittingDuration > 0 && (
           <View style={styles.alarmSummary}>
             <Text style={styles.summaryMainText}>
-              {String(formatCountdown(Math.floor((totalSittingDuration || 0) * 60)) || '0 sn')} dir oturuyorsun
+              {String(formatCountdown(Math.floor((totalSittingDuration || 0) * 60), t) || `0 ${t('timer.secondsShort')}`)} {t('alarm.sittingFor')}
             </Text>
           </View>
         )}
@@ -100,7 +101,7 @@ const AlarmScreen = ({
               onPress={onSnooze}
             >
               <Text style={styles.snoozeButtonText}>
-                {`Ertele (${String(snoozeDuration || 0)}dk)`}
+                {`${t('alarm.snooze')} (${String(snoozeDuration || 0)}${t('timer.minutes')})`}
               </Text>
             </TouchableOpacity>
           )}
@@ -111,7 +112,7 @@ const AlarmScreen = ({
             activeOpacity={0.7}
             delayPressIn={0}
           >
-            <Text style={styles.standUpButtonText}>Kalktım ✓</Text>
+            <Text style={styles.standUpButtonText}>{t('alarm.standUp')} ✓</Text>
           </TouchableOpacity>
         </View>
       </View>

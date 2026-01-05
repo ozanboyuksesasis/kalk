@@ -1,0 +1,7 @@
+/* 
+  iOS App Name Localization - Turkish
+  This file is used when the device language is Turkish
+*/
+CFBundleDisplayName = "Kalk";
+CFBundleName = "Kalk";
+

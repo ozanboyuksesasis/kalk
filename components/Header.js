@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
 
 const Header = ({ onMenuPress }) => {
+  const { t } = useTranslation();
   // StatusBar yüksekliğini hesapla
   const statusBarHeight = Platform.OS === 'ios' 
     ? Constants.statusBarHeight 
@@ -22,7 +24,7 @@ const Header = ({ onMenuPress }) => {
         </View>
         
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>Kalk Hatırlatıcı</Text>
+          <Text style={styles.title}>{t('app.name')}</Text>
         </View>
         
         <TouchableOpacity

@@ -1,0 +1,155 @@
+{
+  "common": {
+    "back": "◀ Geri",
+    "save": "✓ Kaydet",
+    "cancel": "İptal",
+    "ok": "Tamam",
+    "yes": "Evet",
+    "no": "Hayır"
+  },
+  "timer": {
+    "setTime": "Kalkış zamanını ayarla",
+    "start": "Başlat",
+    "stop": "Durdur",
+    "minutes": "dakika",
+    "seconds": "saniye",
+    "isRunning": "Çalışıyor",
+    "timeLeft": "Kalan süre",
+    "afterStandUp": "sonra kalk",
+    "secondsShort": "sn",
+    "minutesShort": "dk",
+    "hoursShort": "saat",
+    "increase10": "+10sn",
+    "decrease10": "-10sn",
+    "maximum": "Maksimum"
+  },
+  "alarm": {
+    "title": "Kalkma Zamanı! 🚶",
+    "subtitle": "Uzun süredir oturuyorsunuz\nKalkıp biraz yürüyün",
+    "sittingFor": "dir oturuyorsun",
+    "standUp": "Kalktım",
+    "snooze": "Ertele",
+    "snoozeCount": "Erteleme sayısı",
+    "maxSnoozesReached": "Maksimum erteleme sayısına ulaşıldı"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "saveSuccess": "Ayarlar kaydedildi",
+    "snoozeDuration": "Erteleme Süresi (dakika)",
+    "maxSnoozes": "Maksimum Erteleme Sayısı",
+    "times": "kez",
+    "permissions": "İzinler",
+    "notificationPermission": "Bildirim izni",
+    "granted": "Açık",
+    "denied": "Kapalı",
+    "alarmSettings": "Alarm Ayarları",
+    "vibration": "📳 Titreşim",
+    "sound": "🔊 Ses",
+    "alarmSound": "Alarm Sesi:",
+    "dataManagement": "Veri Yönetimi",
+    "clearData": "🗑️ Verileri Temizle",
+    "clearButton": "Temizle",
+    "clearing": "Temizleniyor...",
+    "clearDataDescription": "Tüm istatistik verileri ve timer durumları silinir",
+    "clearDataConfirm": "Tüm istatistik verileri ve timer durumları silinecek. Bu işlem geri alınamaz. Emin misiniz?",
+    "clearDataSuccessTitle": "Başarılı",
+    "clearDataSuccess": "Tüm veriler temizlendi.",
+    "clearDataErrorTitle": "Hata",
+    "clearDataError": "Veriler temizlenirken bir hata oluştu.",
+    "saveSuccess": "Ayarlar kaydedildi"
+  },
+  "menu": {
+    "title": "Menü",
+    "statistics": "İstatistikler",
+    "statisticsSubtext": "Verilerinizi görüntüleyin",
+    "profile": "Profil",
+    "profileSubtext": "Kişisel bilgilerinizi düzenleyin",
+    "settings": "Ayarlar",
+    "settingsSubtext": "Uygulama ayarlarını düzenleyin",
+    "version": "Kalk Hatırlatıcı v1.0"
+  },
+  "gender": {
+    "title": "Cinsiyet Seçin",
+    "subtitle": "Kişiselleştirilmiş deneyim için",
+    "male": "Erkek",
+    "female": "Kadın"
+  },
+  "notifications": {
+    "title": "Kalkma Zamanı! 🚶",
+    "body": "Uzun süredir oturuyorsunuz, kalkıp biraz yürüyün!",
+    "permissionRequired": "Bildirim izni gerekli",
+    "permissionMessage": "Arka planda kalkma uyarısı gönderebilmemiz için bildirim iznine ihtiyacımız var. Lütfen izin ver.",
+    "permissionGranted": "Bildirim izni verildi. Arka planda kalkma uyarıları gönderilebilecek. ✅",
+    "permissionDenied": "Bildirim izni verilemedi. İstersen cihaz ayarlarından daha sonra açabilirsin.",
+    "permissionStatus": "Şu anki bildirim izni durumu: {{status}}.",
+    "permissionError": "Bildirim izni durumu alınamadı. Lütfen daha sonra tekrar dene.",
+    "permissionRequestError": "Bildirim izni istenirken bir hata oluştu. Lütfen daha sonra tekrar dene.",
+    "openSettings": "Sistem ayarları açılamadı. Lütfen cihaz ayarlarından uygulamayı elle aç ve izinleri güncelle."
+  },
+  "health": {
+    "notSet": "Süre ayarlanmamış",
+    "excellent": "Harika! En sağlıklı oturma süresi seçildi",
+    "good": "Kas-iskelet sistemi mikro zorlanmaları başlar, kan dolaşımı yavaşlar. Kısa bir esneme iyi gelir.",
+    "ok": "Sağlıklı bir süre seçtin. Hareket etmeyi unutma.",
+    "warning": "Bel, boyun ve omuz kaslarında yük artışı riski.",
+    "caution": "Bel ve boyun kaslarında yük artışı riski. Dikkatli olunmalı.",
+    "danger": "Duruş bozukluğu riski, bel fıtığı riskinde artış, metabolizma yavaşlar.",
+    "highRisk": "Kan akışı ciddi şekilde azalır, bel disklerine binen yük artar, boyun düzleşmesi riski.",
+    "critical": "Kalp-damar hastalıkları riski, Tip 2 diyabet riski, kronik bel ağrısı, varis ve pıhtı riski. Tıbben önerilmez."
+  },
+  "statistics": {
+    "title": "İstatistikler",
+    "today": "Bugün",
+    "allTime": "Tüm Zamanlar",
+    "totalSittingTime": "Toplam Oturma Süresi",
+    "alarmCount": "Alarm Sayısı",
+    "snoozeCount": "Erteleme Sayısı",
+    "noData": "Henüz veri yok",
+    "noDataSubtext": "Alarm kurup \"Kalktım\" dediğinizde istatistikler burada görünecek",
+    "minutes": "dakika",
+    "hours": "saat",
+    "sittingTime": "oturdun",
+    "alarmSet": "alarm kurdun",
+    "alarmSnoozed": "alarm erteledin",
+    "since": "den bu yana",
+    "sittingTimeTitle": "Oturma Süresi",
+    "chartHint": "💡 Noktalara tıklayarak gün detaylarını görebilirsiniz",
+    "loadingChart": "Grafik yükleniyor...",
+    "loadingMore": "Daha fazla veri yükleniyor...",
+    "duration": "Süre",
+    "sessions": "Oturma",
+    "dayNames": {
+      "sunday": "Pazar",
+      "monday": "Pazartesi",
+      "tuesday": "Salı",
+      "wednesday": "Çarşamba",
+      "thursday": "Perşembe",
+      "friday": "Cuma",
+      "saturday": "Cumartesi"
+    },
+    "monthNames": {
+      "january": "Ocak",
+      "february": "Şubat",
+      "march": "Mart",
+      "april": "Nisan",
+      "may": "Mayıs",
+      "june": "Haziran",
+      "july": "Temmuz",
+      "august": "Ağustos",
+      "september": "Eylül",
+      "october": "Ekim",
+      "november": "Kasım",
+      "december": "Aralık"
+    }
+  },
+  "profile": {
+    "title": "Profil",
+    "gender": "Cinsiyet",
+    "male": "Erkek",
+    "female": "Kadın"
+  },
+  "app": {
+    "name": "Kalk Hatırlatıcı"
+  }
+}
+

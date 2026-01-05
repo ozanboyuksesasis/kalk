@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const GenderSelection = ({ onSelect }) => {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Cinsiyet Seçin</Text>
-      <Text style={styles.subtitle}>Kişiselleştirilmiş deneyim için</Text>
+      <Text style={styles.title}>{t('gender.title')}</Text>
+      <Text style={styles.subtitle}>{t('gender.subtitle')}</Text>
       
       <View style={styles.optionsContainer}>
         <TouchableOpacity
@@ -13,7 +15,7 @@ const GenderSelection = ({ onSelect }) => {
           onPress={() => onSelect('male')}
         >
           <Text style={styles.emoji}>🚶</Text>
-          <Text style={styles.label}>Erkek</Text>
+          <Text style={styles.label}>{t('gender.male')}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity
@@ -21,7 +23,7 @@ const GenderSelection = ({ onSelect }) => {
           onPress={() => onSelect('female')}
         >
           <Text style={styles.emoji}>🚶‍♀️</Text>
-          <Text style={styles.label}>Kadın</Text>
+          <Text style={styles.label}>{t('gender.female')}</Text>
         </TouchableOpacity>
       </View>
     </View>
