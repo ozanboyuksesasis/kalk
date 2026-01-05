@@ -116,7 +116,6 @@ const TimerScreen = ({
         {/* Manuel Ayar Alanı (Tamamen Bağımsız) */}
         {!isRunning && !isAlarm && (
           <View style={styles.manualInputContainer}>
-            <Text style={styles.manualInputLabel}>{t('timer.setTime')}</Text>
             <View style={styles.manualInputRow}>
               <TextInput
                 style={styles.manualInput}
@@ -261,6 +260,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: 20,
     gap: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   rotateButton: {
     paddingHorizontal: 20,
@@ -347,6 +348,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 12,
     marginVertical: 20,
+    alignItems: 'center',
   },
   healthText: {
     fontSize: 16,
@@ -356,6 +358,7 @@ const styles = StyleSheet.create({
   controls: {
     paddingHorizontal: 20,
     marginTop: 30,
+    alignItems: 'stretch',
   },
   startButton: {
     backgroundColor: '#4CAF50',
