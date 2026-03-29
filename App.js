@@ -90,6 +90,21 @@ Notifications.setNotificationHandler({
   },
 });
 
+/**
+ * Expo bazen `status` ile `granted` alanını geçici olarak uyumsuz döndürebiliyor; ayarlar ekranı için tek doğruluk kaynağı.
+ */
+function isExpoNotificationAllowed(perm) {
+  if (!perm) return false;
+  if (perm.granted === true) return true;
+  if (perm.status === 'granted') return true;
+  if (
+    Platform.OS === 'ios' &&
+    perm.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export default function App() {
   const { t } = useTranslation(); // i18n hook'u
@@ -179,6 +194,25 @@ export default function App() {
       });
     }
   }, []);
+
+  // Ayarlar açıldığında bildirim satırı Expo ile güncellensin (ilk açılışta izin verildiği halde null/eski state kalmasın)
+  useEffect(() => {
+    if (!showSettings) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await Notifications.getPermissionsAsync();
+        if (!cancelled) {
+          setNotificationStatus(isExpoNotificationAllowed(perm) ? 'granted' : 'denied');
+        }
+      } catch (e) {
+        console.error('Bildirim izni okunamadı:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSettings]);
 
   // 🔑 TEK ZAMAN HESAPLAMA FONKSİYONU - Tüm zaman hesaplamaları buradan yapılacak
   const calculateRemainingTime = () => {
@@ -651,8 +685,9 @@ export default function App() {
   // Bildirim izinlerini ayarlar ekranından yönetmek için yardımcı fonksiyonlar
   const checkNotificationPermissions = async () => {
     try {
-      const settings = await notifee.getNotificationSettings();
-      const status = settings.authorizationStatus === 1 ? 'granted' : 'denied';
+      const perm = await Notifications.getPermissionsAsync();
+      const allowed = isExpoNotificationAllowed(perm);
+      const status = allowed ? 'granted' : 'denied';
       setNotificationStatus(status);
       const statusText = status === 'granted' ? t('settings.granted') : t('settings.denied');
       showAlert(
@@ -682,8 +717,10 @@ export default function App() {
 
   const requestNotificationPermissionsAgain = async () => {
     try {
-      const settings = await notifee.requestPermission();
-      const status = settings.authorizationStatus === 1 ? 'granted' : 'denied';
+      await notifee.requestPermission();
+      const perm = await Notifications.getPermissionsAsync();
+      const allowed = isExpoNotificationAllowed(perm);
+      const status = allowed ? 'granted' : 'denied';
       setNotificationStatus(status);
       if (status === 'granted') {
         showAlert(
@@ -743,7 +780,7 @@ export default function App() {
 
   const requestPermissions = async () => {
     try {
-      const { status } = await Notifications.requestPermissionsAsync({
+      const result = await Notifications.requestPermissionsAsync({
         ios: {
           allowAlert: true,
           allowBadge: true,
@@ -751,8 +788,9 @@ export default function App() {
           allowAnnouncements: false,
         },
       });
-      setNotificationStatus(status);
-      if (status !== 'granted') {
+      const allowed = isExpoNotificationAllowed(result);
+      setNotificationStatus(allowed ? 'granted' : 'denied');
+      if (!allowed) {
         if (Platform.OS === 'ios') {
           showAlert(
             'Bildirim izni gerekli',
@@ -769,7 +807,7 @@ export default function App() {
           console.warn('Bildirim izni verilmedi. Arka planda uyarılar çalışmayabilir.');
         }
       } else {
-        console.log('Bildirim izni verildi:', status);
+        console.log('Bildirim izni verildi');
       }
     } catch (error) {
       console.error('Bildirim izni istenirken hata:', error);
@@ -786,6 +824,15 @@ export default function App() {
       if (prevAppState.match(/inactive|background/) && nextAppState === 'active') {
         // Uygulama ön plana geldiğinde (background'dan veya kapalı durumdan)
         console.log('📱 Uygulama ön plana geldi (background/inactive -> active)');
+
+        (async () => {
+          try {
+            const perm = await Notifications.getPermissionsAsync();
+            setNotificationStatus(isExpoNotificationAllowed(perm) ? 'granted' : 'denied');
+          } catch (e) {
+            console.warn('Bildirim izni senkronu atlandı:', e);
+          }
+        })();
         
         // 🔑 KRİTİK: Uygulama açıkken tüm planlanmış bildirimleri iptal et
         // Arka plana geçince planlanan bildirimler uygulama açıkken tetiklenmemeli
