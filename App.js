@@ -370,6 +370,7 @@ export default function App() {
 
     setIsAlarm(false);
     setIsRunning(false);
+    setTimeLeft(null);
 
     if (navigationRef.isReady()) {
       navigationRef.reset({ index: 0, routes: [{ name: 'Timer' }] });
