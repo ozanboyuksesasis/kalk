@@ -2,6 +2,7 @@ node_modules/
 .expo/
 .expo-shared/
 dist/
+android/.kotlin/
 npm-debug.*
 *.jks
 *.p8

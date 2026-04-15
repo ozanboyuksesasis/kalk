@@ -1,0 +1,18 @@
+diff --git a/android/src/main/jni/CMakeLists.txt b/android/src/main/jni/CMakeLists.txt
+index 1234567..abcdefg 100644
+--- a/android/src/main/jni/CMakeLists.txt
++++ b/android/src/main/jni/CMakeLists.txt
+@@ -1,6 +1,7 @@
+ cmake_minimum_required(VERSION 3.13)
+ set(CMAKE_VERBOSE_MAKEFILE ON)
++find_library(CPP_SHARED_LIB c++_shared)
+
+ set(LIB_LITERAL rnscreens)
+ set(LIB_TARGET_NAME react_codegen_${LIB_LITERAL})
+@@ -42,6 +43,7 @@ if(ReactAndroid_VERSION_MINOR GREATER_EQUAL 76)
+     ReactAndroid::reactnative
+     ReactAndroid::jsi
+     fbjni::fbjni
++    ${CPP_SHARED_LIB}
+   )
+ else()

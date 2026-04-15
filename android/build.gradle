@@ -17,11 +17,6 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
-    // Notifee repository
-    def notifeeDir = new File(["node", "--print", "require.resolve('@notifee/react-native/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile()
-    maven {
-      url "$notifeeDir/android/libs"
-    }
   }
 }
 

@@ -37,15 +37,12 @@
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM",
-        "USE_EXACT_ALARM"
+        "USE_EXACT_ALARM",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ]
     },
     "web": {},
-    "plugins": [
-      [
-        "expo-notifications"
-      ]
-    ],
+    "plugins": [],
     "extra": {
       "eas": {
         "projectId": "18f75bf2-d17d-487d-ba9d-f644ae0566c0"
