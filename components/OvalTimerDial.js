@@ -1,385 +1,386 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, PanResponder, Platform, Vibration } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import Svg, { Circle, Path } from 'react-native-svg';
+import React, { useRef, useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  PanResponder,
+  Modal,
+  TouchableOpacity,
+  Text,
+  Dimensions,
+} from 'react-native';
+import Svg, { Circle, Path, Line } from 'react-native-svg';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MAX_MINUTES = 120;
-const DEG_PER_MIN = 360 / MAX_MINUTES;
-const SNAP_MIN = 5; // 10 dakikadan 5 dakikaya düşürüldü (daha hassas)
-const SNAP_DEG = SNAP_MIN * DEG_PER_MIN;
+const DEG_PER_MIN = 360 / MAX_MINUTES; // 3°
+const MAX_ANGLE = 359.99;
+const WEDGE_HALF = 2;
 
-export default function OvalTimerDial({
-                                        size = 220,
-                                        strokeWidth = 12,
-                                        onChange,
-                                        isRunning = false,
-                                        isAlarm = false,
-                                        duration = null,
-                                        scrollViewRef = null,
-                                      }) {
+const PRESETS = [15, 30, 45, 60, 90, 120];
+
+/* ---------- SHARED HELPERS ---------- */
+const polar = (cx, cy, r, a) => {
+  const rad = (a - 90) * Math.PI / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+};
+
+const arc = (cx, cy, r, start, end) => {
+  const e = polar(cx, cy, r, end);
+  const large = end - start > 180 ? 1 : 0;
+  return `A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
+};
+
+const progressPath = (cx, cy, r, a) => {
+  if (a <= 0) return '';
+  const start = polar(cx, cy, r, 0);
+  let d = `M ${start.x} ${start.y}`;
+  if (a <= 180) {
+    d += ' ' + arc(cx, cy, r, 0, a);
+  } else {
+    d += ' ' + arc(cx, cy, r, 0, 179.99);
+    d += ' ' + arc(cx, cy, r, 180, a);
+  }
+  return d;
+};
+
+/* ---------- DIAL VIEW (pure render) ---------- */
+function DialView({ size, strokeWidth, angle, panHandlers, showTicks = false }) {
   const center = size / 2;
-
-  /* ---------- STROKES ---------- */
   const BASE_STROKE = strokeWidth;
   const BASE_OUTER = 3;
   const PROGRESS_STROKE = BASE_STROKE + 2;
-
-  /* ---------- RADII ---------- */
   const BASE_RADIUS = center - BASE_STROKE / 2 - 2;
   const PROGRESS_RADIUS = BASE_RADIUS + (PROGRESS_STROKE - BASE_STROKE) / 2;
 
-  /* ---------- STATE ---------- */
-  const [angle, setAngle] = useState(0);
-  const angleRef = useRef(0);
-  const [dragging, setDragging] = useState(false);
-  const lastVibrationAngleRef = useRef(-1); // Son titreşim verilen açı
-
-  /* ---------- POLAR HELPERS ---------- */
-  const polar = (cx, cy, r, a) => {
-    const rad = (a - 90) * Math.PI / 180;
-    return {
-      x: cx + r * Math.cos(rad),
-      y: cy + r * Math.sin(rad),
-    };
-  };
-
-  const arc = (cx, cy, r, start, end) => {
-    const e = polar(cx, cy, r, end);
-    const large = end - start > 180 ? 1 : 0;
-    return `A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
-  };
-
-  /* ---------- SINGLE SAFE PATH ---------- */
-  const progressPath = (cx, cy, r, a) => {
-    if (a <= 0) return '';
-
-    const start = polar(cx, cy, r, 0);
-    let d = `M ${start.x} ${start.y}`;
-
-    if (a <= 180) {
-      d += ' ' + arc(cx, cy, r, 0, a);
-    } else {
-      d += ' ' + arc(cx, cy, r, 0, 179.99);
-      d += ' ' + arc(cx, cy, r, 180, a);
-    }
-
-    return d;
-  };
-
-  /* ---------- EFFECT ---------- */
-  useEffect(() => {
-    if (!dragging && duration > 0) {
-      const a = Math.min((duration / MAX_MINUTES) * 360, 359.99);
-      angleRef.current = a;
-      setAngle(a);
-    }
-  }, [duration, dragging]);
-
-  /* ---------- TOUCH ---------- */
-  const angleFromTouch = (x, y) => {
-    const dx = x - center;
-    const dy = y - center;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Merkeze çok yakınsa önceki angle'i koru
-    const minDistance = PROGRESS_RADIUS * 0.05;
-    if (distance < minDistance) {
-      return angleRef.current;
-    }
-    
-    // Math.atan2 ile açı hesapla (0° = üstte, saat yönünde artar)
-    let deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-    
-    // 0-360 arasına normalize et
-    if (deg < 0) deg += 360;
-    if (deg >= 360) deg -= 360;
-    
-    return deg;
-  };
-  
-  // Touch pozisyonunun halka alanında olup olmadığını kontrol et
-  const isTouchInDialArea = (x, y) => {
-    const dx = x - center;
-    const dy = y - center;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    const handleRadius = 14;
-    const tolerance = 30;
-    const minRadius = Math.max(0, PROGRESS_RADIUS - handleRadius - tolerance);
-    const maxRadius = PROGRESS_RADIUS + handleRadius + tolerance;
-    
-    return distance >= minRadius && distance <= maxRadius;
-  };
-
-  // Basit delta hesaplama - 360° wrap desteği
-  const getAngleDelta = (currentAngle, lastAngle) => {
-    let delta = currentAngle - lastAngle;
-    
-    // 360° geçişlerini düzelt (kısa yolu seç)
-    if (delta > 180) {
-      delta -= 360;
-    } else if (delta < -180) {
-      delta += 360;
-    }
-    
-    return delta;
-  };
-
-  const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: (evt) => {
-          if (isRunning || isAlarm) return false;
-          
-          const { locationX, locationY } = evt.nativeEvent;
-          
-          // iOS'ta daha agresif: Touch alanı kontrolü yap ama daha esnek ol
-          if (Platform.OS === 'ios') {
-            // iOS'ta halka alanı kontrolünü biraz gevşet
-            if (isTouchInDialArea(locationX, locationY)) {
-              // Scroll'u kapat
-              if (scrollViewRef && scrollViewRef.current) {
-                try {
-                  scrollViewRef.current.setNativeProps({ scrollEnabled: false });
-                } catch (e) {
-                  // Hata olursa devam et
-                }
-              }
-              return true;
-            }
-            // iOS'ta: Eğer halka alanına yakınsa da true döndür (daha esnek)
-            const dx = locationX - center;
-            const dy = locationY - center;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const extendedRadius = PROGRESS_RADIUS + 50; // Daha geniş algılama alanı
-            if (distance <= extendedRadius) {
-              if (scrollViewRef && scrollViewRef.current) {
-                try {
-                  scrollViewRef.current.setNativeProps({ scrollEnabled: false });
-                } catch (e) {
-                  // Hata olursa devam et
-                }
-              }
-              return true;
-            }
-            return false;
-          } else {
-            // Android'de normal kontrol
-            if (isTouchInDialArea(locationX, locationY)) {
-              if (scrollViewRef && scrollViewRef.current) {
-                try {
-                  scrollViewRef.current.setNativeProps({ scrollEnabled: false });
-                } catch (e) {
-                  // Hata olursa devam et
-                }
-              }
-              return true;
-            }
-            return false;
-          }
-        },
-        
-        // iOS için: move event'lerini yakalamak için - daha agresif
-        onMoveShouldSetPanResponder: (evt, gestureState) => {
-          if (isRunning || isAlarm) return false;
-          
-          if (Platform.OS === 'ios') {
-            const { locationX, locationY } = evt.nativeEvent;
-            
-            // Halka alanı kontrolü
-            if (isTouchInDialArea(locationX, locationY)) {
-              // Çok küçük hareket eşiği - hemen yakala
-              return Math.abs(gestureState.dx) > 0.1 || Math.abs(gestureState.dy) > 0.1;
-            }
-            
-            // Genişletilmiş alan kontrolü
-            const dx = locationX - center;
-            const dy = locationY - center;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const extendedRadius = PROGRESS_RADIUS + 50;
-            if (distance <= extendedRadius) {
-              // Küçük hareket eşiği
-              return Math.abs(gestureState.dx) > 0.1 || Math.abs(gestureState.dy) > 0.1;
-            }
-          }
-          return false;
-        },
-        
-        // iOS için: PanResponder'ın daha iyi çalışması için
-        onPanResponderTerminationRequest: () => false, // iOS'ta scroll ile çakışmayı önle
-        onShouldBlockNativeResponder: () => true, // Native gesture'ları engelle
-
-        onPanResponderGrant: (e) => {
-          setDragging(true);
-          
-          // Scroll'u kapat
-          if (scrollViewRef && scrollViewRef.current) {
-            try {
-              scrollViewRef.current.setNativeProps({ scrollEnabled: false });
-            } catch (e) {
-              // Hata olursa devam et
-            }
-          }
-          
-          lastVibrationAngleRef.current = -1; // Yeni dokunma başladığında titreşim flag'ini sıfırla
-        },
-
-        onPanResponderMove: e => {
-          const { locationX, locationY } = e.nativeEvent;
-          
-          // iOS'ta daha esnek alan kontrolü
-          let shouldProcess = false;
-          if (Platform.OS === 'ios') {
-            // iOS'ta hem normal hem genişletilmiş alan kontrolü
-            if (isTouchInDialArea(locationX, locationY)) {
-              shouldProcess = true;
-            } else {
-              // Genişletilmiş alan kontrolü (daha esnek)
-              const dx = locationX - center;
-              const dy = locationY - center;
-              const distance = Math.sqrt(dx * dx + dy * dy);
-              const extendedRadius = PROGRESS_RADIUS + 50;
-              if (distance <= extendedRadius) {
-                shouldProcess = true;
-              }
-            }
-          } else {
-            // Android'de normal kontrol
-            shouldProcess = isTouchInDialArea(locationX, locationY);
-          }
-          
-          if (!shouldProcess) {
-            return;
-          }
-          
-          const currentAngle = angleFromTouch(locationX, locationY);
-          const lastAngle = angleRef.current;
-          
-          // Delta hesapla
-          let delta = getAngleDelta(currentAngle, lastAngle);
-          
-          // Çok büyük delta'ları filtrele (sıçramaları önle)
-          const maxDelta = 90;
-          if (Math.abs(delta) > maxDelta) {
-            return; // Bu bir sıçrama, görmezden gel
-          }
-          
-          // Delta'yı uygula ve clamp et (0-359.99 arasında kal)
-          let newAngle = lastAngle + delta;
-          const wasAtMax = lastAngle >= 359.99;
-          newAngle = Math.max(0, Math.min(newAngle, 359.99)); // 360°'de dur, 0'a geçme
-          
-          // 360°'ye ulaştığında ve ileri gitmeye çalıştığında titreşim ver
-          if (newAngle >= 359.99 && !wasAtMax && lastVibrationAngleRef.current < 359.99) {
-            if (Platform.OS === 'ios') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } else {
-              Vibration.vibrate(50);
-            }
-            lastVibrationAngleRef.current = 359.99;
-          } else if (newAngle < 359.99) {
-            // 360°'den uzaklaştığında titreşim flag'ini sıfırla
-            lastVibrationAngleRef.current = -1;
-          }
-          
-          // Her iki platformda da direkt update (basit ve çalışan)
-          angleRef.current = newAngle;
-          setAngle(newAngle);
-          onChange?.(Math.round(newAngle / DEG_PER_MIN));
-        },
-
-        onPanResponderRelease: () => {
-          setDragging(false);
-          
-          // Snap yok - hangi açıdaysa o açıda kal (hassas ayar)
-          // Sadece clamp et (0-359.99 arasında)
-          const finalAngle = Math.max(0, Math.min(angleRef.current, 359.99));
-          angleRef.current = finalAngle;
-          setAngle(finalAngle);
-          onChange?.(Math.round(finalAngle / DEG_PER_MIN));
-          
-          // Scroll'u tekrar aç
-          if (scrollViewRef && scrollViewRef.current) {
-            if (Platform.OS === 'ios') {
-              // iOS'ta kısa bir delay ile (state reset için)
-              setTimeout(() => {
-                try {
-                  scrollViewRef.current?.setNativeProps({ scrollEnabled: true });
-                } catch (e) {
-                  // Hata olursa devam et
-                }
-              }, 50);
-            } else {
-              try {
-                scrollViewRef.current.setNativeProps({ scrollEnabled: true });
-              } catch (e) {
-                // Hata olursa devam et
-              }
-            }
-          }
-        },
-        
-        onPanResponderTerminate: () => {
-          setDragging(false);
-          
-          // Scroll'u tekrar aç
-          if (scrollViewRef && scrollViewRef.current) {
-            try {
-              scrollViewRef.current.setNativeProps({ scrollEnabled: true });
-            } catch (e) {
-              // Hata olursa devam et
-            }
-          }
-        },
-      })
-  ).current;
-
-  /* ---------- HANDLE ---------- */
   const hAngle = angle - 90;
   const hx = center + PROGRESS_RADIUS * Math.cos(hAngle * Math.PI / 180);
   const hy = center + PROGRESS_RADIUS * Math.sin(hAngle * Math.PI / 180);
 
-  const isDisabled = isRunning || isAlarm;
-  
-  return (
-    <View 
-      style={[
-        { width: size, height: size },
-        isDisabled && { opacity: 0.5 }
-      ]} 
-      {...(!isDisabled ? panResponder.panHandlers : {})}
-      pointerEvents={isDisabled ? 'none' : 'auto'}
-    >
-        <Svg width={size} height={size}>
-          {/* Base ring */}
-          <Circle
-              cx={center}
-              cy={center}
-              r={BASE_RADIUS}
-              stroke="#E0E0E0"
-              strokeWidth={BASE_OUTER}
-              fill="none"
-          />
-
-          {/* Progress ring (Forest style – single path) */}
-          {angle > 0 && (
-              <Path
-                  d={progressPath(center, center, PROGRESS_RADIUS, angle)}
-                  stroke="#2196F3"
-                  strokeWidth={PROGRESS_STROKE}
-                  fill="none"
-                  strokeLinecap="butt"
-              />
-          )}
-        </Svg>
-
-        {/* Handle */}
-        <View
-            style={[
-              styles.handle,
-              { left: hx - 14, top: hy - 14 },
-            ]}
+  const ticks = [];
+  if (showTicks) {
+    const tickOuterR = BASE_RADIUS - BASE_STROKE / 2 - 6;
+    for (let m = 0; m < MAX_MINUTES; m += 5) {
+      const isMajor = m % 15 === 0;
+      const deg = (m * DEG_PER_MIN) - 90;
+      const rad = deg * Math.PI / 180;
+      const rInner = tickOuterR - (isMajor ? 10 : 5);
+      const x1 = center + tickOuterR * Math.cos(rad);
+      const y1 = center + tickOuterR * Math.sin(rad);
+      const x2 = center + rInner * Math.cos(rad);
+      const y2 = center + rInner * Math.sin(rad);
+      ticks.push(
+        <Line
+          key={m}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={isMajor ? '#90A4AE' : '#CFD8DC'}
+          strokeWidth={isMajor ? 2 : 1}
+          strokeLinecap="round"
         />
-      </View>
+      );
+    }
+  }
+
+  return (
+    <View style={{ width: size, height: size }} {...(panHandlers || {})}>
+      <Svg width={size} height={size}>
+        <Circle
+          cx={center}
+          cy={center}
+          r={BASE_RADIUS}
+          stroke="#E0E0E0"
+          strokeWidth={BASE_OUTER}
+          fill="none"
+        />
+        {ticks}
+        {angle > 0 && (
+          <Path
+            d={progressPath(center, center, PROGRESS_RADIUS, angle)}
+            stroke="#2196F3"
+            strokeWidth={PROGRESS_STROKE}
+            fill="none"
+            strokeLinecap="butt"
+          />
+        )}
+      </Svg>
+      <View style={[styles.handle, { left: hx - 14, top: hy - 14 }]} />
+    </View>
+  );
+}
+
+/* ---------- EDITABLE DIAL (inside modal) ---------- */
+function EditableDial({ size, strokeWidth, initialMinutes, onMinutesChange }) {
+  const center = size / 2;
+  const BASE_STROKE = strokeWidth;
+  const PROGRESS_STROKE = BASE_STROKE + 2;
+  const BASE_RADIUS = center - BASE_STROKE / 2 - 2;
+  const PROGRESS_RADIUS = BASE_RADIUS + (PROGRESS_STROKE - BASE_STROKE) / 2;
+
+  const initialAngle = Math.min(((initialMinutes || 0) / MAX_MINUTES) * 360, MAX_ANGLE);
+
+  const [angle, setAngle] = useState(initialAngle);
+  const angleRef = useRef(initialAngle);
+  const lastTouchAngleRef = useRef(0);
+  const wedgeLockRef = useRef(false);
+  const lastReportedMinRef = useRef(initialMinutes || 0);
+
+  const angleFromTouch = (x, y) => {
+    const dx = x - center;
+    const dy = y - center;
+    let deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+    if (deg < 0) deg += 360;
+    if (deg >= 360) deg -= 360;
+    return deg;
+  };
+
+  const isTouchInDialArea = (x, y) => {
+    const dx = x - center;
+    const dy = y - center;
+    return Math.sqrt(dx * dx + dy * dy) <= PROGRESS_RADIUS + 30;
+  };
+
+  const wrapDelta = (d) => {
+    if (d > 180)  return d - 360;
+    if (d < -180) return d + 360;
+    return d;
+  };
+
+  const isInTopWedge = (a) => a <= WEDGE_HALF || a >= (360 - WEDGE_HALF);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        const { locationX, locationY } = evt.nativeEvent;
+        return isTouchInDialArea(locationX, locationY);
+      },
+      onMoveShouldSetPanResponder: (evt, gs) => {
+        const { locationX, locationY } = evt.nativeEvent;
+        if (!isTouchInDialArea(locationX, locationY)) return false;
+        return Math.abs(gs.dx) > 0.5 || Math.abs(gs.dy) > 0.5;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+
+      onPanResponderGrant: (e) => {
+        const { locationX, locationY } = e.nativeEvent;
+        lastTouchAngleRef.current = angleFromTouch(locationX, locationY);
+        const atBoundary = angleRef.current <= 0.01 || angleRef.current >= MAX_ANGLE - 0.01;
+        wedgeLockRef.current = atBoundary && isInTopWedge(lastTouchAngleRef.current);
+      },
+
+      onPanResponderMove: (e) => {
+        const { locationX, locationY } = e.nativeEvent;
+        const currentTouchAngle = angleFromTouch(locationX, locationY);
+        const inWedge = isInTopWedge(currentTouchAngle);
+        const lastAngle = angleRef.current;
+
+        if (wedgeLockRef.current && inWedge) return;
+
+        if (wedgeLockRef.current && !inWedge) {
+          wedgeLockRef.current = false;
+          if (currentTouchAngle > 0 && currentTouchAngle < 180) {
+            lastTouchAngleRef.current = WEDGE_HALF;
+          } else {
+            lastTouchAngleRef.current = 360 - WEDGE_HALF;
+          }
+        }
+
+        let delta = wrapDelta(currentTouchAngle - lastTouchAngleRef.current);
+        if (Math.abs(delta) > 90) {
+          lastTouchAngleRef.current = currentTouchAngle;
+          return;
+        }
+
+        let newAngle = lastAngle + delta;
+        newAngle = Math.max(0, Math.min(newAngle, MAX_ANGLE));
+        lastTouchAngleRef.current = currentTouchAngle;
+
+        if (Math.abs(newAngle - lastAngle) < 0.01) return;
+
+        if (newAngle <= 0.01 || newAngle >= MAX_ANGLE - 0.01) {
+          if (isInTopWedge(currentTouchAngle)) {
+            wedgeLockRef.current = true;
+          }
+        }
+
+        angleRef.current = newAngle;
+        setAngle(newAngle);
+
+        const newMin = Math.round(newAngle / DEG_PER_MIN);
+        if (newMin !== lastReportedMinRef.current) {
+          lastReportedMinRef.current = newMin;
+          onMinutesChange(newMin);
+        }
+      },
+
+      onPanResponderRelease: () => {
+        wedgeLockRef.current = false;
+      },
+      onPanResponderTerminate: () => {
+        wedgeLockRef.current = false;
+      },
+    })
+  ).current;
+
+  return (
+    <DialView
+      size={size}
+      strokeWidth={strokeWidth}
+      angle={angle}
+      panHandlers={panResponder.panHandlers}
+      showTicks
+    />
+  );
+}
+
+/* ---------- MAIN COMPONENT ---------- */
+export default function OvalTimerDial({
+  size = 220,
+  strokeWidth = 12,
+  onChange,
+  isRunning = false,
+  isAlarm = false,
+  duration = null,
+}) {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [pendingMinutes, setPendingMinutes] = useState(duration || 0);
+  const [dialKey, setDialKey] = useState(0);
+
+  const displayAngle = Math.min(((duration || 0) / MAX_MINUTES) * 360, MAX_ANGLE);
+  const editSize = Math.min(SCREEN_WIDTH - 48, 340);
+
+  const isDisabled = isRunning || isAlarm;
+
+  const openEditor = () => {
+    if (isDisabled) return;
+    setPendingMinutes(duration || 0);
+    setDialKey(k => k + 1);
+    setModalVisible(true);
+  };
+
+  const handleConfirm = () => {
+    setModalVisible(false);
+    onChange?.(pendingMinutes);
+  };
+
+  const handleCancel = () => {
+    setModalVisible(false);
+  };
+
+  // Dışarıdan (preset / ± buton) değer atayınca dial remount edilir
+  const setPendingExternal = (newMin) => {
+    const clamped = Math.max(0, Math.min(MAX_MINUTES, newMin));
+    setPendingMinutes(clamped);
+    setDialKey(k => k + 1);
+  };
+
+  const showHours = pendingMinutes >= 60;
+  const hh = Math.floor(pendingMinutes / 60);
+  const mm = pendingMinutes % 60;
+
+  return (
+    <>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={openEditor}
+        disabled={isDisabled}
+        style={isDisabled && { opacity: 0.5 }}
+      >
+        <DialView size={size} strokeWidth={strokeWidth} angle={displayAngle} />
+      </TouchableOpacity>
+
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleCancel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {/* Dial + merkez zaman göstergesi */}
+            <View style={{ width: editSize, height: editSize }}>
+              <EditableDial
+                key={dialKey}
+                size={editSize}
+                strokeWidth={strokeWidth + 2}
+                initialMinutes={pendingMinutes}
+                onMinutesChange={setPendingMinutes}
+              />
+              <View
+                style={[StyleSheet.absoluteFillObject, styles.centerTimeWrap]}
+                pointerEvents="none"
+              >
+                {showHours ? (
+                  <Text style={styles.centerTimeMain}>
+                    {hh}
+                    <Text style={styles.centerTimeSep}>:</Text>
+                    {String(mm).padStart(2, '0')}
+                  </Text>
+                ) : (
+                  <Text style={styles.centerTimeMain}>{pendingMinutes}</Text>
+                )}
+                <Text style={styles.centerTimeUnit}>
+                  {showHours ? 'saat' : 'dakika'}
+                </Text>
+              </View>
+            </View>
+
+            {/* ±1 ince ayar */}
+            <View style={styles.fineTuneRow}>
+              <TouchableOpacity
+                style={[styles.fineBtn, pendingMinutes <= 0 && styles.fineBtnDisabled]}
+                onPress={() => setPendingExternal(pendingMinutes - 1)}
+                disabled={pendingMinutes <= 0}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.fineBtnText, pendingMinutes <= 0 && styles.fineBtnTextDisabled]}>−</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.fineBtn, pendingMinutes >= MAX_MINUTES && styles.fineBtnDisabled]}
+                onPress={() => setPendingExternal(pendingMinutes + 1)}
+                disabled={pendingMinutes >= MAX_MINUTES}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.fineBtnText, pendingMinutes >= MAX_MINUTES && styles.fineBtnTextDisabled]}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Hızlı preset'ler */}
+            <View style={styles.presetRow}>
+              {PRESETS.map(m => {
+                const active = pendingMinutes === m;
+                return (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.presetChip, active && styles.presetChipActive]}
+                    onPress={() => setPendingExternal(m)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* İptal / onay */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.7}>
+                <Text style={styles.cancelBtnText}>✕</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} activeOpacity={0.8}>
+                <Text style={styles.confirmBtnText}>✓</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -393,5 +394,145 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: '#fff',
     elevation: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  centerTimeWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerTimeMain: {
+    fontSize: 68,
+    fontWeight: '700',
+    color: '#1976D2',
+    lineHeight: 76,
+    includeFontPadding: false,
+    letterSpacing: -1,
+  },
+  centerTimeSep: {
+    fontSize: 60,
+    color: '#90CAF9',
+    fontWeight: '600',
+  },
+  centerTimeUnit: {
+    fontSize: 13,
+    color: '#90A4AE',
+    marginTop: 6,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  fineTuneRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginTop: 24,
+  },
+  fineBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F0F7FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#BBDEFB',
+  },
+  fineBtnDisabled: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#E0E0E0',
+  },
+  fineBtnText: {
+    fontSize: 30,
+    color: '#1976D2',
+    fontWeight: '600',
+    lineHeight: 32,
+    includeFontPadding: false,
+  },
+  fineBtnTextDisabled: {
+    color: '#CCC',
+  },
+  presetRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 18,
+    alignSelf: 'stretch',
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 16,
+    backgroundColor: '#F5F7FA',
+    borderWidth: 1,
+    borderColor: '#E0E4E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetChipActive: {
+    backgroundColor: '#2196F3',
+    borderColor: '#1976D2',
+  },
+  presetChipText: {
+    fontSize: 14,
+    color: '#546E7A',
+    fontWeight: '600',
+  },
+  presetChipTextActive: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 28,
+    marginTop: 22,
+  },
+  cancelBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  cancelBtnText: {
+    fontSize: 24,
+    color: '#888',
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  confirmBtnText: {
+    fontSize: 26,
+    color: '#fff',
+    fontWeight: '700',
   },
 });
